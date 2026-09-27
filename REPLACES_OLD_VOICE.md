@@ -36,6 +36,7 @@ Inventory taken read-only on 2026-09-27. The old bot is still running and has no
 - **Discord transcript channel post.** Keep the edited-in-place `.md` post in 🎙️ Auto Transcripts, or replace it with something better. At minimum, don't silently drop it.
 - **Privacy notice + Pause.** Guests must still be able to see they're being recorded and pause it. Only the owner can resume.
 - **Join/leave control.** Jester's spec says it auto-joins when the owner joins and leaves on "Jester, disconnect", with a manual `/leave` escape hatch. That replaces the `!voice join/leave` commands, which the owner added earlier on 2026-09-27 to stop *unwanted* auto-joining.
+  - **Decided 2026-09-27 (owner picked A):** Jester auto-joins when the owner joins the voice room. "Jester, leave" (or "disconnect") makes it leave, with no auto-rejoin during that same owner presence. Keep a typed escape hatch for failures. `!voice join/leave` is not carried over.
 - **Voice → EBI sessions** (tag messages, model/backend switch, new session, close/tidy). These are already in Jester's spec as typed Jester Control actions, now conversational instead of a 10-second silence window.
 - **Tag roster.** Jester can simply answer "who's running?" out loud. The channel roster message is optional and can be kept cheaply.
 - **Retention.** Keep the 30-day pruning, or whatever the owner prefers.
