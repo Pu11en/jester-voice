@@ -1,3 +1,5 @@
 .venv/
 data/
 results/*.err
+__pycache__/
+results/*.summary.txt
