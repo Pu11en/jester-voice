@@ -5,3 +5,4 @@ __pycache__/
 results/*.summary.txt
 recorder/server.log
 results/owner_*
+samples/

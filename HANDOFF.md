@@ -8,6 +8,10 @@ Jester is NOT an OpenAI GPT-Live/API project anymore. Early repo docs were creat
 
 Do not implement from old assumptions. Do not blindly port the existing EBI voice extension. Follow the behavior and decision hierarchy in this file, then benchmark the machine before choosing final voice components.
 
+## Decision update — 2026-09-27
+
+The old voice-transcripts bot will be removed entirely; Jester becomes the only voice bot. Jester therefore OWNS room transcripts (this replaces the "Existing room transcripts" section below) and must keep allwork working. Jester can reuse the existing DrewAI bot token for voice once the old service is stopped, so no separate Discord application is needed. Full inventory and cut-over order: `REPLACES_OLD_VOICE.md`.
+
 ## Mission
 
 Build a separate Discord voice bot/service called Jester that lets the owner operate and navigate the existing EBI/ccdb agent environment almost entirely by natural spoken conversation.
