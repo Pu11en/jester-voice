@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jester voice sample</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; max-width: 720px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 22px; font-weight: 600; }
+  .tip { color: #aaa; line-height: 1.5; }
+  .card { background: #1d1d1d; border-radius: 12px; padding: 28px; margin: 24px 0; }
+  .step { color: #888; font-size: 14px; }
+  .prompt { font-size: 26px; line-height: 1.35; margin: 12px 0 24px; }
+  button { font-size: 20px; padding: 16px 28px; border: 0; border-radius: 10px; cursor: pointer; }
+  #rec { background: #2e7d32; color: #fff; }
+  #rec.on { background: #c62828; }
+  #skip { background: #333; color: #ccc; margin-left: 12px; }
+  #status { margin-top: 18px; color: #9ccc65; min-height: 24px; }
+  .done { font-size: 26px; text-align: center; }
+</style>
+</head>
+<body>
+<h1>Help Jester learn how you talk</h1>
+<p class="tip">Press <b>Start</b>, answer out loud like you're talking to a friend, then press <b>Done</b>.
+Ums, pauses, changing your mind: all good, that's exactly what we need. About 15–30 seconds each. Nothing leaves your computer.</p>
+
+<div class="card" id="card">
+  <div class="step" id="step"></div>
+  <div class="prompt" id="prompt"></div>
+  <button id="rec">Start</button><button id="skip">Skip</button>
+  <div id="status"></div>
+</div>
+
+<script>
+const prompts = [
+  "What are you working on today? Just ramble about it.",
+  "Pretend you're telling Jester to have Zoro fix something. Make it up, and change your mind halfway.",
+  "Ask Jester what Nami is up to, then ask a follow-up question.",
+  "Explain a bug or annoying problem you had recently, like you're thinking out loud.",
+  "Tell Jester to start a new session for one of your projects and say what it should do.",
+  "Ask Jester any random question you'd normally ask ChatGPT.",
+  "Tell Jester: when Zoro's done, have Sanji start on the tests. Then add one more thing.",
+  "Talk about anything for 20 seconds. Pause whenever you feel like it.",
+];
+let i = 0, rec = null, chunks = [], stream = null;
+const $ = id => document.getElementById(id);
+
+function show() {
+  if (i >= prompts.length) {
+    $("card").innerHTML = '<div class="done">All done, thank you! 🎉<br><br>You can close this tab and tell Claude "done".</div>';
+    return;
+  }
+  $("step").textContent = `Prompt ${i + 1} of ${prompts.length}`;
+  $("prompt").textContent = prompts[i];
+  $("rec").textContent = "Start";
+  $("rec").classList.remove("on");
+}
+
+$("rec").onclick = async () => {
+  if (!rec) {
+    try {
+      stream = stream || await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch (e) { $("status").textContent = "Mic blocked: allow microphone access in the browser bar, then try again."; return; }
+    chunks = [];
+    rec = new MediaRecorder(stream);
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = async () => {
+      $("status").textContent = "Saving…";
+      const blob = new Blob(chunks, { type: rec.mimeType });
+      rec = null;
+      const r = await fetch(`/upload?prompt=${i + 1}`, { method: "POST", body: blob });
+      const j = await r.json();
+      $("status").textContent = j.ok ? `Saved ✓` : `Save failed: ${j.error}`;
+      if (j.ok) { i++; show(); }
+    };
+    rec.start();
+    $("rec").textContent = "Done";
+    $("rec").classList.add("on");
+    $("status").textContent = "Recording… talk naturally.";
+  } else {
+    rec.stop();
+  }
+};
+$("skip").onclick = () => { if (!rec) { i++; show(); $("status").textContent = ""; } };
+show();
+</script>
+</body>
+</html>
