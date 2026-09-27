@@ -1,0 +1,3476 @@
+{
+ "summary": {
+  "model": "smart-turn-v3.2-gpu.onnx",
+  "stop_ms": 200,
+  "cases": {
+   "complete": 63,
+   "incomplete-any-word": 63,
+   "incomplete-function-word": 60
+  },
+  "checks_total": 318,
+  "mid_sentence_pauses_per_turn": 0.72,
+  "infer_ms_mean": 16.7,
+  "infer_ms_p90": 26.4,
+  "no_final_check": 1,
+  "threshold_sweep": {
+   "0.3": {
+    "complete_cut_early_pct": 42.9,
+    "complete_replied_on_time_pct": 39.7,
+    "complete_fell_back_to_timeout_pct": 17.5,
+    "complete_delay_ms_mean": 317,
+    "incomplete-any-word_cut_at_thinking_pause_pct": 28.6,
+    "incomplete-any-word_cut_anywhere_pct": 57.1,
+    "incomplete-function-word_cut_at_thinking_pause_pct": 8.3,
+    "incomplete-function-word_cut_anywhere_pct": 41.7
+   },
+   "0.5": {
+    "complete_cut_early_pct": 31.7,
+    "complete_replied_on_time_pct": 38.1,
+    "complete_fell_back_to_timeout_pct": 30.2,
+    "complete_delay_ms_mean": 318,
+    "incomplete-any-word_cut_at_thinking_pause_pct": 23.8,
+    "incomplete-any-word_cut_anywhere_pct": 47.6,
+    "incomplete-function-word_cut_at_thinking_pause_pct": 8.3,
+    "incomplete-function-word_cut_anywhere_pct": 35.0
+   },
+   "0.7": {
+    "complete_cut_early_pct": 27.0,
+    "complete_replied_on_time_pct": 34.9,
+    "complete_fell_back_to_timeout_pct": 38.1,
+    "complete_delay_ms_mean": 320,
+    "incomplete-any-word_cut_at_thinking_pause_pct": 22.2,
+    "incomplete-any-word_cut_anywhere_pct": 42.9,
+    "incomplete-function-word_cut_at_thinking_pause_pct": 8.3,
+    "incomplete-function-word_cut_anywhere_pct": 31.7
+   },
+   "0.8": {
+    "complete_cut_early_pct": 27.0,
+    "complete_replied_on_time_pct": 31.7,
+    "complete_fell_back_to_timeout_pct": 41.3,
+    "complete_delay_ms_mean": 319,
+    "incomplete-any-word_cut_at_thinking_pause_pct": 17.5,
+    "incomplete-any-word_cut_anywhere_pct": 38.1,
+    "incomplete-function-word_cut_at_thinking_pause_pct": 8.3,
+    "incomplete-function-word_cut_anywhere_pct": 31.7
+   },
+   "0.9": {
+    "complete_cut_early_pct": 22.2,
+    "complete_replied_on_time_pct": 25.4,
+    "complete_fell_back_to_timeout_pct": 52.4,
+    "complete_delay_ms_mean": 314,
+    "incomplete-any-word_cut_at_thinking_pause_pct": 12.7,
+    "incomplete-any-word_cut_anywhere_pct": 31.7,
+    "incomplete-function-word_cut_at_thinking_pause_pct": 8.3,
+    "incomplete-function-word_cut_anywhere_pct": 26.7
+   },
+   "0.95": {
+    "complete_cut_early_pct": 20.6,
+    "complete_replied_on_time_pct": 19.0,
+    "complete_fell_back_to_timeout_pct": 60.3,
+    "complete_delay_ms_mean": 319,
+    "incomplete-any-word_cut_at_thinking_pause_pct": 7.9,
+    "incomplete-any-word_cut_anywhere_pct": 25.4,
+    "incomplete-function-word_cut_at_thinking_pause_pct": 5.0,
+    "incomplete-function-word_cut_anywhere_pct": 23.3
+   }
+  }
+ },
+ "rows": [
+  {
+   "file": "data/clips/000.wav",
+   "kind": "complete",
+   "end": 5.16,
+   "text": "Mr. Quilter is the apostle of the middle classes, and we are glad to welcome his gospel.",
+   "checks": [
+    {
+     "t": 5.472,
+     "prob": 0.1268,
+     "infer_ms": 12.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/000.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.6,
+   "text": "Mr. Quilter is the apostle of the middle classes, and we ...",
+   "checks": [
+    {
+     "t": 3.872,
+     "prob": 0.0502,
+     "infer_ms": 10.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/000.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.56,
+   "text": "Mr. Quilter is the apostle of the middle ...",
+   "checks": [
+    {
+     "t": 2.944,
+     "prob": 0.7281,
+     "infer_ms": 13.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/001.wav",
+   "kind": "complete",
+   "end": 4.24,
+   "text": "Nor is Mr. Quilter's manner less interesting than his matter.",
+   "checks": [
+    {
+     "t": 4.512,
+     "prob": 0.0113,
+     "infer_ms": 13.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/001.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.76,
+   "text": "Nor is Mr. Quilter's manner less interesting than his ...",
+   "checks": [
+    {
+     "t": 4.128,
+     "prob": 0.008,
+     "infer_ms": 16.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/001.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.76,
+   "text": "Nor is Mr. Quilter's manner less interesting than his ...",
+   "checks": [
+    {
+     "t": 4.128,
+     "prob": 0.008,
+     "infer_ms": 9.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/002.wav",
+   "kind": "complete",
+   "end": 11.86,
+   "text": "He tells us that at this festive season of the year, with Christmas and roast beef looming before us, similes drawn from eating and its results occur most readily to the mind.",
+   "checks": [
+    {
+     "t": 7.264,
+     "prob": 0.5652,
+     "infer_ms": 9.7,
+     "final": false
+    },
+    {
+     "t": 12.16,
+     "prob": 0.9801,
+     "infer_ms": 9.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/002.wav",
+   "kind": "incomplete-function-word",
+   "end": 4.4,
+   "text": "He tells us that at this festive season of the year, with ...",
+   "checks": [
+    {
+     "t": 4.736,
+     "prob": 0.0059,
+     "infer_ms": 45.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/002.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.84,
+   "text": "He tells us that at this festive season of the year, with Christmas ...",
+   "checks": [
+    {
+     "t": 5.12,
+     "prob": 0.0141,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/003.wav",
+   "kind": "complete",
+   "end": 9.18,
+   "text": "He has grave doubts whether Sir Frederick Layton's work is really Greek after all, and can discover in it but little of rocky Ithaca.",
+   "checks": [
+    {
+     "t": 9.536,
+     "prob": 0.9727,
+     "infer_ms": 9.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/003.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.78,
+   "text": "He has grave doubts whether Sir Frederick Layton's work is ...",
+   "checks": [
+    {
+     "t": 4.128,
+     "prob": 0.0083,
+     "infer_ms": 11.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/003.wav",
+   "kind": "incomplete-any-word",
+   "end": 6.26,
+   "text": "He has grave doubts whether Sir Frederick Layton's work is really Greek after all, and ...",
+   "checks": [
+    {
+     "t": 6.56,
+     "prob": 0.0076,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/004.wav",
+   "kind": "complete",
+   "end": 28.82,
+   "text": "Lanell's pictures are a sort of up -guards -and -adam paintings, and Mason's exquisite Idols are as national as a jingo poem. Mr. Birkett fosters landscapes, smile at one much in the same way that Mr. Karker used to flash his teeth. And Mr. John Collier gives his sitter a cheerful slap on the back before he says, like a shampooer in a Turkish bath, next man.",
+   "checks": [
+    {
+     "t": 2.88,
+     "prob": 0.9497,
+     "infer_ms": 13.7,
+     "final": false
+    },
+    {
+     "t": 5.248,
+     "prob": 0.8319,
+     "infer_ms": 10.0,
+     "final": false
+    },
+    {
+     "t": 10.24,
+     "prob": 0.9873,
+     "infer_ms": 9.4,
+     "final": false
+    },
+    {
+     "t": 18.912,
+     "prob": 0.9736,
+     "infer_ms": 9.4,
+     "final": false
+    },
+    {
+     "t": 29.12,
+     "prob": 0.0061,
+     "infer_ms": 8.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/004.wav",
+   "kind": "incomplete-function-word",
+   "end": 23.64,
+   "text": "Lanell's pictures are a sort of up -guards -and -adam paintings, and Mason's exquisite Idols are as national as a jingo poem. Mr. Birkett fosters landscapes, smile at one much in the same way that Mr. Karker used to flash his teeth. And Mr. John Collier gives his sitter a cheerful slap on ...",
+   "checks": [
+    {
+     "t": 2.88,
+     "prob": 0.9497,
+     "infer_ms": 9.1,
+     "final": false
+    },
+    {
+     "t": 5.248,
+     "prob": 0.8319,
+     "infer_ms": 9.6,
+     "final": false
+    },
+    {
+     "t": 10.24,
+     "prob": 0.9873,
+     "infer_ms": 9.4,
+     "final": false
+    },
+    {
+     "t": 18.912,
+     "prob": 0.9736,
+     "infer_ms": 9.7,
+     "final": false
+    },
+    {
+     "t": 23.936,
+     "prob": 0.1051,
+     "infer_ms": 9.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/004.wav",
+   "kind": "incomplete-any-word",
+   "end": 12.1,
+   "text": "Lanell's pictures are a sort of up -guards -and -adam paintings, and Mason's exquisite Idols are as national as a jingo poem. Mr. Birkett ...",
+   "checks": [
+    {
+     "t": 2.88,
+     "prob": 0.9497,
+     "infer_ms": 9.9,
+     "final": false
+    },
+    {
+     "t": 5.248,
+     "prob": 0.8319,
+     "infer_ms": 9.8,
+     "final": false
+    },
+    {
+     "t": 10.24,
+     "prob": 0.9873,
+     "infer_ms": 9.1,
+     "final": false
+    },
+    {
+     "t": 12.448,
+     "prob": 0.736,
+     "infer_ms": 9.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/005.wav",
+   "kind": "complete",
+   "end": 8.2,
+   "text": "It is obviously unnecessary for us to point out how luminous these criticisms are, how delicate an expression.",
+   "checks": [
+    {
+     "t": 8.544,
+     "prob": 0.9519,
+     "infer_ms": 11.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/005.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.98,
+   "text": "It is obviously unnecessary for us to ...",
+   "checks": [
+    {
+     "t": 3.296,
+     "prob": 0.9576,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/005.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.98,
+   "text": "It is obviously unnecessary for us to ...",
+   "checks": [
+    {
+     "t": 3.296,
+     "prob": 0.9576,
+     "infer_ms": 9.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/006.wav",
+   "kind": "complete",
+   "end": 4.88,
+   "text": "On the general principles of art, Mr. Quilter writes with equal lucidity.",
+   "checks": [
+    {
+     "t": 5.152,
+     "prob": 0.9863,
+     "infer_ms": 9.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/006.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.94,
+   "text": "On the general principles of ...",
+   "checks": [
+    {
+     "t": 2.272,
+     "prob": 0.0332,
+     "infer_ms": 9.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/006.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.02,
+   "text": "On the general principles of art, Mr. Quilter ...",
+   "checks": [
+    {
+     "t": 3.296,
+     "prob": 0.0086,
+     "infer_ms": 9.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/007.wav",
+   "kind": "complete",
+   "end": 8.66,
+   "text": "Painting, he tells us, is of a different quality to mathematics and finish in art is adding more factor.",
+   "checks": [
+    {
+     "t": 2.464,
+     "prob": 0.0063,
+     "infer_ms": 10.8,
+     "final": false
+    },
+    {
+     "t": 4.992,
+     "prob": 0.8716,
+     "infer_ms": 12.2,
+     "final": false
+    },
+    {
+     "t": 7.36,
+     "prob": 0.0087,
+     "infer_ms": 9.0,
+     "final": false
+    },
+    {
+     "t": 8.928,
+     "prob": 0.9656,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/007.wav",
+   "kind": "incomplete-function-word",
+   "end": 6.2,
+   "text": "Painting, he tells us, is of a different quality to mathematics and finish in ...",
+   "checks": [
+    {
+     "t": 2.464,
+     "prob": 0.0063,
+     "infer_ms": 12.6,
+     "final": false
+    },
+    {
+     "t": 4.992,
+     "prob": 0.8716,
+     "infer_ms": 9.6,
+     "final": false
+    },
+    {
+     "t": 6.496,
+     "prob": 0.0104,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/007.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.08,
+   "text": "Painting, he tells us, is of a different ...",
+   "checks": [
+    {
+     "t": 2.464,
+     "prob": 0.0063,
+     "infer_ms": 17.7,
+     "final": false
+    },
+    {
+     "t": 3.36,
+     "prob": 0.0142,
+     "infer_ms": 11.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/008.wav",
+   "kind": "complete",
+   "end": 4.42,
+   "text": "As for etchings, they are of two kinds, British and foreign.",
+   "checks": [
+    {
+     "t": 3.2,
+     "prob": 0.9756,
+     "infer_ms": 9.1,
+     "final": false
+    },
+    {
+     "t": 4.0,
+     "prob": 0.98,
+     "infer_ms": 9.8,
+     "final": false
+    },
+    {
+     "t": 4.768,
+     "prob": 0.9834,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/008.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.04,
+   "text": "As for etchings, they are of ...",
+   "checks": [
+    {
+     "t": 2.368,
+     "prob": 0.0102,
+     "infer_ms": 10.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/008.wav",
+   "kind": "incomplete-any-word",
+   "end": 1.9,
+   "text": "As for etchings, they are ...",
+   "checks": [
+    {
+     "t": 2.176,
+     "prob": 0.021,
+     "infer_ms": 10.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/009.wav",
+   "kind": "complete",
+   "end": 17.68,
+   "text": "He laments most bitterly the divorce that has been made between decorative art and what we usually call pictures, makes a customary appeal to the Last Judgment, and reminds us that in the great days of art Michelangelo was the furnishing upholsterer.",
+   "checks": [
+    {
+     "t": 6.176,
+     "prob": 0.0057,
+     "infer_ms": 10.0,
+     "final": false
+    },
+    {
+     "t": 8.512,
+     "prob": 0.1036,
+     "infer_ms": 13.5,
+     "final": false
+    },
+    {
+     "t": 16.416,
+     "prob": 0.0258,
+     "infer_ms": 9.7,
+     "final": false
+    },
+    {
+     "t": 17.952,
+     "prob": 0.8697,
+     "infer_ms": 9.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/009.wav",
+   "kind": "incomplete-function-word",
+   "end": 13.18,
+   "text": "He laments most bitterly the divorce that has been made between decorative art and what we usually call pictures, makes a customary appeal to the Last Judgment, and reminds us that in the ...",
+   "checks": [
+    {
+     "t": 6.176,
+     "prob": 0.0057,
+     "infer_ms": 8.9,
+     "final": false
+    },
+    {
+     "t": 8.512,
+     "prob": 0.1036,
+     "infer_ms": 9.8,
+     "final": false
+    },
+    {
+     "t": 13.472,
+     "prob": 0.0573,
+     "infer_ms": 9.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/009.wav",
+   "kind": "incomplete-any-word",
+   "end": 12.2,
+   "text": "He laments most bitterly the divorce that has been made between decorative art and what we usually call pictures, makes a customary appeal to the Last Judgment, and reminds ...",
+   "checks": [
+    {
+     "t": 6.176,
+     "prob": 0.0057,
+     "infer_ms": 9.2,
+     "final": false
+    },
+    {
+     "t": 8.512,
+     "prob": 0.1036,
+     "infer_ms": 9.2,
+     "final": false
+    },
+    {
+     "t": 12.48,
+     "prob": 0.7884,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/010.wav",
+   "kind": "complete",
+   "end": 4.94,
+   "text": "near the fire, and the ornaments Fred brought home from India on the mental board.",
+   "checks": [
+    {
+     "t": 1.152,
+     "prob": 0.0891,
+     "infer_ms": 8.9,
+     "final": false
+    },
+    {
+     "t": 5.248,
+     "prob": 0.7998,
+     "infer_ms": 10.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/010.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.48,
+   "text": "near the fire, and the ornaments Fred brought home from ...",
+   "checks": [
+    {
+     "t": 1.152,
+     "prob": 0.0891,
+     "infer_ms": 9.5,
+     "final": false
+    },
+    {
+     "t": 3.808,
+     "prob": 0.0113,
+     "infer_ms": 20.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/010.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.68,
+   "text": "near the fire, and the ornaments Fred ...",
+   "checks": [
+    {
+     "t": 1.152,
+     "prob": 0.0891,
+     "infer_ms": 10.6,
+     "final": false
+    },
+    {
+     "t": 2.976,
+     "prob": 0.0096,
+     "infer_ms": 11.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/011.wav",
+   "kind": "complete",
+   "end": 14.58,
+   "text": "In fact, he is quite severe on Mr. Ruskin for not recognizing that a picture should denote the frailty of man, and remarks with pleasing courtesy and felicitous grace that many faces are feeling.",
+   "checks": [
+    {
+     "t": 8.288,
+     "prob": 0.0343,
+     "infer_ms": 10.5,
+     "final": false
+    },
+    {
+     "t": 8.896,
+     "prob": 0.007,
+     "infer_ms": 10.0,
+     "final": false
+    },
+    {
+     "t": 13.12,
+     "prob": 0.0081,
+     "infer_ms": 9.0,
+     "final": false
+    },
+    {
+     "t": 14.88,
+     "prob": 0.974,
+     "infer_ms": 10.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/011.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.62,
+   "text": "In fact, he is quite severe on Mr. Ruskin for not recognizing that a ...",
+   "checks": [
+    {
+     "t": 5.952,
+     "prob": 0.01,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/011.wav",
+   "kind": "incomplete-any-word",
+   "end": 5.06,
+   "text": "In fact, he is quite severe on Mr. Ruskin for not recognizing that ...",
+   "checks": [
+    {
+     "t": 5.344,
+     "prob": 0.0057,
+     "infer_ms": 10.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/012.wav",
+   "kind": "complete",
+   "end": 4.8,
+   "text": "only unfortunately his own work never does get good",
+   "checks": [
+    {
+     "t": 5.12,
+     "prob": 0.0799,
+     "infer_ms": 10.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/012.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.38,
+   "text": "only unfortunately his own work never does get ...",
+   "checks": [
+    {
+     "t": 4.704,
+     "prob": 0.0076,
+     "infer_ms": 9.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/013.wav",
+   "kind": "complete",
+   "end": 6.34,
+   "text": "Mr. Quilter has missed his chance, for he has failed even to make himself the tipper of painting.",
+   "checks": [
+    {
+     "t": 2.944,
+     "prob": 0.9868,
+     "infer_ms": 9.6,
+     "final": false
+    },
+    {
+     "t": 6.624,
+     "prob": 0.9221,
+     "infer_ms": 11.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/013.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.46,
+   "text": "Mr. Quilter has missed his chance, for he has failed even to make himself the ...",
+   "checks": [
+    {
+     "t": 2.944,
+     "prob": 0.9868,
+     "infer_ms": 9.3,
+     "final": false
+    },
+    {
+     "t": 5.76,
+     "prob": 0.0088,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/013.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.34,
+   "text": "Mr. Quilter has missed his chance, for ...",
+   "checks": [
+    {
+     "t": 2.944,
+     "prob": 0.9868,
+     "infer_ms": 9.8,
+     "final": false
+    },
+    {
+     "t": 3.648,
+     "prob": 0.1247,
+     "infer_ms": 10.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/015.wav",
+   "kind": "complete",
+   "end": 10.14,
+   "text": "Because you are sleeping instead of conquering, the lovely rose princess has become a fiddle without a bow, while poor Shaggy sits there, a cooing dove.",
+   "checks": [
+    {
+     "t": 3.328,
+     "prob": 0.0156,
+     "infer_ms": 10.3,
+     "final": false
+    },
+    {
+     "t": 7.392,
+     "prob": 0.0226,
+     "infer_ms": 9.9,
+     "final": false
+    },
+    {
+     "t": 10.432,
+     "prob": 0.0696,
+     "infer_ms": 9.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/015.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.42,
+   "text": "Because you are sleeping instead of conquering, the lovely rose princess has become a ...",
+   "checks": [
+    {
+     "t": 3.328,
+     "prob": 0.0156,
+     "infer_ms": 11.5,
+     "final": false
+    },
+    {
+     "t": 5.696,
+     "prob": 0.0072,
+     "infer_ms": 11.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/015.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.84,
+   "text": "Because you are sleeping instead of conquering, the lovely ...",
+   "checks": [
+    {
+     "t": 3.328,
+     "prob": 0.0156,
+     "infer_ms": 9.6,
+     "final": false
+    },
+    {
+     "t": 4.128,
+     "prob": 0.0176,
+     "infer_ms": 9.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/016.wav",
+   "kind": "complete",
+   "end": 10.4,
+   "text": "He has gone, and gone for good,\" answered Polychrome, who had managed to squeeze into the room beside the dragon and had witnessed the occurrences with much interest.",
+   "checks": [
+    {
+     "t": 2.848,
+     "prob": 0.8717,
+     "infer_ms": 9.2,
+     "final": false
+    },
+    {
+     "t": 10.688,
+     "prob": 0.4942,
+     "infer_ms": 12.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/016.wav",
+   "kind": "incomplete-function-word",
+   "end": 7.82,
+   "text": "He has gone, and gone for good,\" answered Polychrome, who had managed to squeeze into the room beside the dragon and ...",
+   "checks": [
+    {
+     "t": 2.848,
+     "prob": 0.8717,
+     "infer_ms": 10.6,
+     "final": false
+    },
+    {
+     "t": 8.096,
+     "prob": 0.0322,
+     "infer_ms": 9.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/016.wav",
+   "kind": "incomplete-any-word",
+   "end": 8.36,
+   "text": "He has gone, and gone for good,\" answered Polychrome, who had managed to squeeze into the room beside the dragon and had witnessed ...",
+   "checks": [
+    {
+     "t": 2.848,
+     "prob": 0.8717,
+     "infer_ms": 8.9,
+     "final": false
+    },
+    {
+     "t": 8.64,
+     "prob": 0.0482,
+     "infer_ms": 9.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/017.wav",
+   "kind": "complete",
+   "end": 10.72,
+   "text": "I have remained a prisoner only because I wished to be one. And with this he stepped forward and burst the stout chains as easily as if they had been threads.",
+   "checks": [
+    {
+     "t": 4.8,
+     "prob": 0.0072,
+     "infer_ms": 9.6,
+     "final": false
+    },
+    {
+     "t": 11.008,
+     "prob": 0.0134,
+     "infer_ms": 12.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/017.wav",
+   "kind": "incomplete-function-word",
+   "end": 6.02,
+   "text": "I have remained a prisoner only because I wished to be one. And with ...",
+   "checks": [
+    {
+     "t": 4.8,
+     "prob": 0.0072,
+     "infer_ms": 13.4,
+     "final": false
+    },
+    {
+     "t": 6.336,
+     "prob": 0.0059,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/017.wav",
+   "kind": "incomplete-any-word",
+   "end": 6.54,
+   "text": "I have remained a prisoner only because I wished to be one. And with this he ...",
+   "checks": [
+    {
+     "t": 4.8,
+     "prob": 0.0072,
+     "infer_ms": 9.4,
+     "final": false
+    },
+    {
+     "t": 6.848,
+     "prob": 0.006,
+     "infer_ms": 10.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/018.wav",
+   "kind": "complete",
+   "end": 4.16,
+   "text": "The little girl had been asleep, but she heard the raps and opened the door.",
+   "checks": [
+    {
+     "t": 2.272,
+     "prob": 0.5213,
+     "infer_ms": 10.8,
+     "final": false
+    },
+    {
+     "t": 4.448,
+     "prob": 0.0127,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/018.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.48,
+   "text": "The little girl had been asleep, but she heard the raps and ...",
+   "checks": [
+    {
+     "t": 2.272,
+     "prob": 0.5213,
+     "infer_ms": 10.3,
+     "final": false
+    },
+    {
+     "t": 3.808,
+     "prob": 0.006,
+     "infer_ms": 11.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/018.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.6,
+   "text": "The little girl had been asleep, but she ...",
+   "checks": [
+    {
+     "t": 2.272,
+     "prob": 0.5213,
+     "infer_ms": 9.3,
+     "final": false
+    },
+    {
+     "t": 2.88,
+     "prob": 0.0081,
+     "infer_ms": 10.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/019.wav",
+   "kind": "complete",
+   "end": 3.66,
+   "text": "The king is flood and disgrace and your friends are asking for you.",
+   "checks": [
+    {
+     "t": 3.936,
+     "prob": 0.0069,
+     "infer_ms": 9.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/019.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.4,
+   "text": "The king is flood and ...",
+   "checks": [
+    {
+     "t": 1.696,
+     "prob": 0.0139,
+     "infer_ms": 14.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/019.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.5,
+   "text": "The king is flood and disgrace and your friends ...",
+   "checks": [
+    {
+     "t": 2.784,
+     "prob": 0.3289,
+     "infer_ms": 10.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/020.wav",
+   "kind": "complete",
+   "end": 4.14,
+   "text": "I begged Ruggedo long ago to send him away, but he would not do so.",
+   "checks": [
+    {
+     "t": 4.416,
+     "prob": 0.1342,
+     "infer_ms": 17.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/020.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.12,
+   "text": "I begged Ruggedo long ago to send him away, but ...",
+   "checks": [
+    {
+     "t": 3.392,
+     "prob": 0.0115,
+     "infer_ms": 8.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/020.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.54,
+   "text": "I begged Ruggedo long ago to send him ...",
+   "checks": [
+    {
+     "t": 2.816,
+     "prob": 0.8661,
+     "infer_ms": 10.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/021.wav",
+   "kind": "complete",
+   "end": 3.5,
+   "text": "I also offered to help your brother to escape, but he would not go.",
+   "checks": [
+    {
+     "t": 3.776,
+     "prob": 0.0097,
+     "infer_ms": 12.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/021.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.0,
+   "text": "I also offered to help your brother to ...",
+   "checks": [
+    {
+     "t": 2.272,
+     "prob": 0.9868,
+     "infer_ms": 11.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/021.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.78,
+   "text": "I also offered to help your brother to escape, but he ...",
+   "checks": [
+    {
+     "t": 3.072,
+     "prob": 0.0089,
+     "infer_ms": 13.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/022.wav",
+   "kind": "complete",
+   "end": 3.4,
+   "text": "He eats and sleeps very steadily, replied the new king.",
+   "checks": [
+    {
+     "t": 3.68,
+     "prob": 0.9455,
+     "infer_ms": 14.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/022.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.04,
+   "text": "He eats and sleeps very steadily, replied the ...",
+   "checks": [
+    {
+     "t": 3.328,
+     "prob": 0.2251,
+     "infer_ms": 23.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/022.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.36,
+   "text": "He eats and sleeps very steadily, ...",
+   "checks": [
+    {
+     "t": 2.656,
+     "prob": 0.6723,
+     "infer_ms": 9.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/023.wav",
+   "kind": "complete",
+   "end": 3.12,
+   "text": "I hope he doesn't work too hard, said Shaggy.",
+   "checks": [
+    {
+     "t": 3.392,
+     "prob": 0.9694,
+     "infer_ms": 11.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/023.wav",
+   "kind": "incomplete-any-word",
+   "end": 1.26,
+   "text": "I hope he doesn't ...",
+   "checks": [
+    {
+     "t": 1.536,
+     "prob": 0.027,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/025.wav",
+   "kind": "complete",
+   "end": 8.34,
+   "text": "In fact, there is nothing he can do in these dominions as well as our gnomes, whose numbers are so great that it worries us to keep them all busy.",
+   "checks": [
+    {
+     "t": 5.152,
+     "prob": 0.4201,
+     "infer_ms": 15.0,
+     "final": false
+    },
+    {
+     "t": 8.64,
+     "prob": 0.6523,
+     "infer_ms": 8.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/025.wav",
+   "kind": "incomplete-function-word",
+   "end": 6.7,
+   "text": "In fact, there is nothing he can do in these dominions as well as our gnomes, whose numbers are so great that ...",
+   "checks": [
+    {
+     "t": 5.152,
+     "prob": 0.4201,
+     "infer_ms": 15.4,
+     "final": false
+    },
+    {
+     "t": 6.976,
+     "prob": 0.0083,
+     "infer_ms": 15.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/025.wav",
+   "kind": "incomplete-any-word",
+   "end": 6.7,
+   "text": "In fact, there is nothing he can do in these dominions as well as our gnomes, whose numbers are so great that ...",
+   "checks": [
+    {
+     "t": 5.152,
+     "prob": 0.4201,
+     "infer_ms": 10.1,
+     "final": false
+    },
+    {
+     "t": 6.976,
+     "prob": 0.0083,
+     "infer_ms": 12.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/028.wav",
+   "kind": "complete",
+   "end": 3.08,
+   "text": "inquired Shaggy, in the metal forest.",
+   "checks": [
+    {
+     "t": 1.472,
+     "prob": 0.9891,
+     "infer_ms": 19.0,
+     "final": false
+    },
+    {
+     "t": 3.424,
+     "prob": 0.9063,
+     "infer_ms": 9.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/028.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.26,
+   "text": "inquired Shaggy, in ...",
+   "checks": [
+    {
+     "t": 1.472,
+     "prob": 0.9891,
+     "infer_ms": 9.7,
+     "final": false
+    },
+    {
+     "t": 2.528,
+     "prob": 0.0145,
+     "infer_ms": 8.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/028.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.64,
+   "text": "inquired Shaggy, in the metal ...",
+   "checks": [
+    {
+     "t": 1.472,
+     "prob": 0.9891,
+     "infer_ms": 12.3,
+     "final": false
+    },
+    {
+     "t": 2.912,
+     "prob": 0.7111,
+     "infer_ms": 10.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/030.wav",
+   "kind": "complete",
+   "end": 6.84,
+   "text": "The metal forest is in the great domed cavern, the largest in all our dominions,\" replied Calico.",
+   "checks": [
+    {
+     "t": 7.136,
+     "prob": 0.9262,
+     "infer_ms": 21.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/030.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.86,
+   "text": "The metal forest is in the great domed cavern, the ...",
+   "checks": [
+    {
+     "t": 4.16,
+     "prob": 0.0091,
+     "infer_ms": 24.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/030.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.7,
+   "text": "The metal forest is in the great domed cavern, the largest in ...",
+   "checks": [
+    {
+     "t": 5.024,
+     "prob": 0.1224,
+     "infer_ms": 25.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/032.wav",
+   "kind": "complete",
+   "end": 6.24,
+   "text": "However, if we look sharp, we may be able to discover one of these secret ways.",
+   "checks": [
+    {
+     "t": 1.536,
+     "prob": 0.4662,
+     "infer_ms": 8.8,
+     "final": false
+    },
+    {
+     "t": 3.008,
+     "prob": 0.4602,
+     "infer_ms": 11.6,
+     "final": false
+    },
+    {
+     "t": 6.528,
+     "prob": 0.3648,
+     "infer_ms": 27.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/032.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.44,
+   "text": "However, if we look sharp, we ...",
+   "checks": [
+    {
+     "t": 1.536,
+     "prob": 0.4662,
+     "infer_ms": 29.6,
+     "final": false
+    },
+    {
+     "t": 3.008,
+     "prob": 0.4602,
+     "infer_ms": 28.6,
+     "final": false
+    },
+    {
+     "t": 3.712,
+     "prob": 0.0092,
+     "infer_ms": 17.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/032.wav",
+   "kind": "incomplete-any-word",
+   "end": 5.06,
+   "text": "However, if we look sharp, we may be able to discover one of ...",
+   "checks": [
+    {
+     "t": 1.536,
+     "prob": 0.4662,
+     "infer_ms": 13.3,
+     "final": false
+    },
+    {
+     "t": 3.008,
+     "prob": 0.4602,
+     "infer_ms": 10.0,
+     "final": false
+    },
+    {
+     "t": 5.376,
+     "prob": 0.0069,
+     "infer_ms": 9.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/033.wav",
+   "kind": "complete",
+   "end": 2.2,
+   "text": "Oh no, I'm quite sure he didn't.",
+   "checks": [
+    {
+     "t": 2.336,
+     "prob": 0.9014,
+     "infer_ms": 72.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/033.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.66,
+   "text": "Oh no, I'm quite sure he ...",
+   "checks": [
+    {
+     "t": 1.984,
+     "prob": 0.0313,
+     "infer_ms": 24.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/033.wav",
+   "kind": "incomplete-any-word",
+   "end": 1.52,
+   "text": "Oh no, I'm quite sure ...",
+   "checks": [
+    {
+     "t": 1.792,
+     "prob": 0.9365,
+     "infer_ms": 14.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/035.wav",
+   "kind": "complete",
+   "end": 4.0,
+   "text": "I don't believe Anne knew any magic or she'd have worked it before.",
+   "checks": [
+    {
+     "t": 4.288,
+     "prob": 0.9873,
+     "infer_ms": 21.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/035.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.94,
+   "text": "I don't believe Anne knew any magic or ...",
+   "checks": [
+    {
+     "t": 3.232,
+     "prob": 0.0762,
+     "infer_ms": 22.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/035.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.2,
+   "text": "I don't believe Anne knew any magic or she'd ...",
+   "checks": [
+    {
+     "t": 3.488,
+     "prob": 0.9006,
+     "infer_ms": 26.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/036.wav",
+   "kind": "complete",
+   "end": 2.34,
+   "text": "I do not know, confessed Shaggy.",
+   "checks": [
+    {
+     "t": 2.656,
+     "prob": 0.9777,
+     "infer_ms": 37.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/036.wav",
+   "kind": "incomplete-any-word",
+   "end": 1.32,
+   "text": "I do not know, ...",
+   "checks": [
+    {
+     "t": 1.632,
+     "prob": 0.0081,
+     "infer_ms": 73.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/038.wav",
+   "kind": "complete",
+   "end": 6.54,
+   "text": "Calico went to the Big Gong and pounded on it just as Vergado used to do, but no one answered the summons.",
+   "checks": [
+    {
+     "t": 6.816,
+     "prob": 0.0197,
+     "infer_ms": 31.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/038.wav",
+   "kind": "incomplete-function-word",
+   "end": 4.54,
+   "text": "Calico went to the Big Gong and pounded on it just as Vergado used to ...",
+   "checks": [
+    {
+     "t": 4.832,
+     "prob": 0.0673,
+     "infer_ms": 25.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/038.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.7,
+   "text": "Calico went to the Big Gong and pounded on it just as ...",
+   "checks": [
+    {
+     "t": 4.0,
+     "prob": 0.0063,
+     "infer_ms": 31.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/039.wav",
+   "kind": "complete",
+   "end": 13.86,
+   "text": "Having returned to the royal cavern, Calico first pounded the gong and then sat in the throne, wearing ruggedos discarded ruby crown and holding in his hand the scepter which ruggedo had so often thrown at his head.",
+   "checks": [
+    {
+     "t": 2.528,
+     "prob": 0.99,
+     "infer_ms": 31.2,
+     "final": false
+    },
+    {
+     "t": 3.456,
+     "prob": 0.8055,
+     "infer_ms": 30.4,
+     "final": false
+    },
+    {
+     "t": 14.176,
+     "prob": 0.0301,
+     "infer_ms": 19.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/039.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.88,
+   "text": "Having returned to the royal cavern, Calico first pounded the gong and then sat in the ...",
+   "checks": [
+    {
+     "t": 2.528,
+     "prob": 0.99,
+     "infer_ms": 18.4,
+     "final": false
+    },
+    {
+     "t": 3.456,
+     "prob": 0.8055,
+     "infer_ms": 21.6,
+     "final": false
+    },
+    {
+     "t": 6.176,
+     "prob": 0.0088,
+     "infer_ms": 16.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/039.wav",
+   "kind": "incomplete-any-word",
+   "end": 7.3,
+   "text": "Having returned to the royal cavern, Calico first pounded the gong and then sat in the throne, wearing ruggedos ...",
+   "checks": [
+    {
+     "t": 2.528,
+     "prob": 0.99,
+     "infer_ms": 21.1,
+     "final": false
+    },
+    {
+     "t": 3.456,
+     "prob": 0.8055,
+     "infer_ms": 41.8,
+     "final": false
+    },
+    {
+     "t": 7.584,
+     "prob": 0.0074,
+     "infer_ms": 29.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/040.wav",
+   "kind": "complete",
+   "end": 3.94,
+   "text": "A man said to the universe, Sir, I exist.",
+   "checks": [
+    {
+     "t": 2.4,
+     "prob": 0.8516,
+     "infer_ms": 27.4,
+     "final": false
+    },
+    {
+     "t": 3.456,
+     "prob": 0.0058,
+     "infer_ms": 37.4,
+     "final": false
+    },
+    {
+     "t": 4.256,
+     "prob": 0.8488,
+     "infer_ms": 33.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/040.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.56,
+   "text": "A man said to the universe, Sir, I ...",
+   "checks": [
+    {
+     "t": 2.4,
+     "prob": 0.8516,
+     "infer_ms": 29.6,
+     "final": false
+    },
+    {
+     "t": 3.456,
+     "prob": 0.0058,
+     "infer_ms": 18.2,
+     "final": false
+    },
+    {
+     "t": 3.84,
+     "prob": 0.0075,
+     "infer_ms": 9.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/040.wav",
+   "kind": "incomplete-any-word",
+   "end": 1.4,
+   "text": "A man said to ...",
+   "checks": [
+    {
+     "t": 1.696,
+     "prob": 0.2381,
+     "infer_ms": 9.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/041.wav",
+   "kind": "complete",
+   "end": 6.0,
+   "text": "Sweat covered Brion's body, trickling into the tight -loin cloth that was the only garment he wore.",
+   "checks": [
+    {
+     "t": 2.72,
+     "prob": 0.9671,
+     "infer_ms": 10.7,
+     "final": false
+    },
+    {
+     "t": 6.272,
+     "prob": 0.9794,
+     "infer_ms": 11.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/041.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.54,
+   "text": "Sweat covered Brion's body, trickling into the ...",
+   "checks": [
+    {
+     "t": 2.72,
+     "prob": 0.9671,
+     "infer_ms": 10.4,
+     "final": false
+    },
+    {
+     "t": 3.84,
+     "prob": 0.1229,
+     "infer_ms": 10.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/041.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.6,
+   "text": "Sweat covered Brion's body, trickling into the tight -loin cloth that ...",
+   "checks": [
+    {
+     "t": 2.72,
+     "prob": 0.9671,
+     "infer_ms": 9.6,
+     "final": false
+    },
+    {
+     "t": 4.928,
+     "prob": 0.0205,
+     "infer_ms": 13.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/042.wav",
+   "kind": "complete",
+   "end": 12.74,
+   "text": "The cut on his chest, still dripping blood. The ache of his overstrained eyes. Even the soaring arena around him with the thousands of spectators, retrievalities not worth thinking about.",
+   "checks": [
+    {
+     "t": 3.168,
+     "prob": 0.9553,
+     "infer_ms": 13.6,
+     "final": false
+    },
+    {
+     "t": 5.92,
+     "prob": 0.8914,
+     "infer_ms": 20.9,
+     "final": false
+    },
+    {
+     "t": 10.528,
+     "prob": 0.1045,
+     "infer_ms": 15.7,
+     "final": false
+    },
+    {
+     "t": 13.056,
+     "prob": 0.6244,
+     "infer_ms": 14.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/042.wav",
+   "kind": "incomplete-function-word",
+   "end": 8.58,
+   "text": "The cut on his chest, still dripping blood. The ache of his overstrained eyes. Even the soaring arena around him with the ...",
+   "checks": [
+    {
+     "t": 3.168,
+     "prob": 0.9553,
+     "infer_ms": 14.0,
+     "final": false
+    },
+    {
+     "t": 5.92,
+     "prob": 0.8914,
+     "infer_ms": 15.0,
+     "final": false
+    },
+    {
+     "t": 8.864,
+     "prob": 0.0479,
+     "infer_ms": 12.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/042.wav",
+   "kind": "incomplete-any-word",
+   "end": 7.42,
+   "text": "The cut on his chest, still dripping blood. The ache of his overstrained eyes. Even the soaring arena ...",
+   "checks": [
+    {
+     "t": 3.168,
+     "prob": 0.9553,
+     "infer_ms": 14.7,
+     "final": false
+    },
+    {
+     "t": 5.92,
+     "prob": 0.8914,
+     "infer_ms": 16.1,
+     "final": false
+    },
+    {
+     "t": 7.712,
+     "prob": 0.0175,
+     "infer_ms": 13.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/043.wav",
+   "kind": "complete",
+   "end": 4.7,
+   "text": "His instant panic was followed by a small sharp blow high on his chest.",
+   "checks": [
+    {
+     "t": 5.056,
+     "prob": 0.0179,
+     "infer_ms": 23.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/043.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.4,
+   "text": "His instant panic was followed by a ...",
+   "checks": [
+    {
+     "t": 2.72,
+     "prob": 0.0083,
+     "infer_ms": 18.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/043.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.06,
+   "text": "His instant panic was followed by a small sharp blow high ...",
+   "checks": [
+    {
+     "t": 4.352,
+     "prob": 0.8019,
+     "infer_ms": 13.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/044.wav",
+   "kind": "complete",
+   "end": 4.36,
+   "text": "One minute, a voice said, and the time buzzer sounded.",
+   "checks": [
+    {
+     "t": 1.44,
+     "prob": 0.0957,
+     "infer_ms": 17.5,
+     "final": false
+    },
+    {
+     "t": 2.848,
+     "prob": 0.0257,
+     "infer_ms": 15.1,
+     "final": false
+    },
+    {
+     "t": 4.64,
+     "prob": 0.5337,
+     "infer_ms": 13.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/044.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.5,
+   "text": "One minute, a voice said, and the ...",
+   "checks": [
+    {
+     "t": 1.44,
+     "prob": 0.0957,
+     "infer_ms": 18.6,
+     "final": false
+    },
+    {
+     "t": 2.848,
+     "prob": 0.0257,
+     "infer_ms": 14.6,
+     "final": false
+    },
+    {
+     "t": 3.776,
+     "prob": 0.016,
+     "infer_ms": 16.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/044.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.5,
+   "text": "One minute, a voice said, and the ...",
+   "checks": [
+    {
+     "t": 1.44,
+     "prob": 0.0957,
+     "infer_ms": 16.5,
+     "final": false
+    },
+    {
+     "t": 2.848,
+     "prob": 0.0257,
+     "infer_ms": 14.2,
+     "final": false
+    },
+    {
+     "t": 3.776,
+     "prob": 0.016,
+     "infer_ms": 16.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/045.wav",
+   "kind": "complete",
+   "end": 5.36,
+   "text": "A minute is not a very large measure of time, and his body needed every fraction of it.",
+   "checks": [
+    {
+     "t": 5.632,
+     "prob": 0.0395,
+     "infer_ms": 14.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/045.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.64,
+   "text": "A minute is not a very large measure of time, and his ...",
+   "checks": [
+    {
+     "t": 3.936,
+     "prob": 0.0053,
+     "infer_ms": 14.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/045.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.18,
+   "text": "A minute is not a very large measure ...",
+   "checks": [
+    {
+     "t": 2.528,
+     "prob": 0.822,
+     "infer_ms": 15.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/046.wav",
+   "kind": "complete",
+   "end": 4.12,
+   "text": "The buzzers were triggered his muscles into complete relaxation",
+   "checks": [
+    {
+     "t": 4.448,
+     "prob": 0.4774,
+     "infer_ms": 15.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/046.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.46,
+   "text": "The buzzers were triggered his ...",
+   "checks": [
+    {
+     "t": 2.752,
+     "prob": 0.0315,
+     "infer_ms": 14.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/046.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.46,
+   "text": "The buzzers were triggered his muscles into complete ...",
+   "checks": [
+    {
+     "t": 3.776,
+     "prob": 0.9781,
+     "infer_ms": 17.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/047.wav",
+   "kind": "complete",
+   "end": 4.12,
+   "text": "Only his heart and lungs worked on at a strong measured rate.",
+   "checks": [
+    {
+     "t": 4.416,
+     "prob": 0.983,
+     "infer_ms": 16.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/047.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.86,
+   "text": "Only his heart and lungs worked on at ...",
+   "checks": [
+    {
+     "t": 3.136,
+     "prob": 0.0323,
+     "infer_ms": 30.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/047.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.22,
+   "text": "Only his heart and lungs worked ...",
+   "checks": [
+    {
+     "t": 2.496,
+     "prob": 0.7195,
+     "infer_ms": 48.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/048.wav",
+   "kind": "complete",
+   "end": 3.76,
+   "text": "He was in reverie, sliding along the borders of consciousness.",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.6726,
+     "infer_ms": 45.6,
+     "final": false
+    },
+    {
+     "t": 4.096,
+     "prob": 0.0076,
+     "infer_ms": 14.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/048.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.32,
+   "text": "He was in reverie, sliding along the borders of ...",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.6726,
+     "infer_ms": 14.5,
+     "final": false
+    },
+    {
+     "t": 3.616,
+     "prob": 0.044,
+     "infer_ms": 14.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/048.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.58,
+   "text": "He was in reverie, sliding along ...",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.6726,
+     "infer_ms": 16.2,
+     "final": false
+    },
+    {
+     "t": 2.88,
+     "prob": 0.0106,
+     "infer_ms": 14.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/049.wav",
+   "kind": "complete",
+   "end": 7.98,
+   "text": "The contestants in the twenties needed undisturbed rest. Therefore, nights in the dormitories were as quiet as death.",
+   "checks": [
+    {
+     "t": 4.224,
+     "prob": 0.9897,
+     "infer_ms": 17.6,
+     "final": false
+    },
+    {
+     "t": 8.32,
+     "prob": 0.9852,
+     "infer_ms": 15.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/049.wav",
+   "kind": "incomplete-function-word",
+   "end": 6.14,
+   "text": "The contestants in the twenties needed undisturbed rest. Therefore, nights in the ...",
+   "checks": [
+    {
+     "t": 4.224,
+     "prob": 0.9897,
+     "infer_ms": 15.6,
+     "final": false
+    },
+    {
+     "t": 6.432,
+     "prob": 0.9169,
+     "infer_ms": 17.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/049.wav",
+   "kind": "incomplete-any-word",
+   "end": 6.14,
+   "text": "The contestants in the twenties needed undisturbed rest. Therefore, nights in the ...",
+   "checks": [
+    {
+     "t": 4.224,
+     "prob": 0.9897,
+     "infer_ms": 14.4,
+     "final": false
+    },
+    {
+     "t": 6.432,
+     "prob": 0.9169,
+     "infer_ms": 16.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/050.wav",
+   "kind": "complete",
+   "end": 9.94,
+   "text": "Particularly so on this last night, when only two of the little cubicles were occupied, the thousands of others standing with dark, empty doors.",
+   "checks": [
+    {
+     "t": 2.976,
+     "prob": 0.0136,
+     "infer_ms": 83.5,
+     "final": false
+    },
+    {
+     "t": 6.304,
+     "prob": 0.1192,
+     "infer_ms": 109.7,
+     "final": false
+    },
+    {
+     "t": 10.24,
+     "prob": 0.7749,
+     "infer_ms": 40.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/050.wav",
+   "kind": "incomplete-function-word",
+   "end": 4.16,
+   "text": "Particularly so on this last night, when only two of ...",
+   "checks": [
+    {
+     "t": 2.976,
+     "prob": 0.0136,
+     "infer_ms": 32.2,
+     "final": false
+    },
+    {
+     "t": 4.48,
+     "prob": 0.0223,
+     "infer_ms": 43.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/050.wav",
+   "kind": "incomplete-any-word",
+   "end": 8.46,
+   "text": "Particularly so on this last night, when only two of the little cubicles were occupied, the thousands of others standing ...",
+   "checks": [
+    {
+     "t": 2.976,
+     "prob": 0.0136,
+     "infer_ms": 30.8,
+     "final": false
+    },
+    {
+     "t": 6.304,
+     "prob": 0.1192,
+     "infer_ms": 30.7,
+     "final": false
+    },
+    {
+     "t": 8.736,
+     "prob": 0.0191,
+     "infer_ms": 53.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/051.wav",
+   "kind": "complete",
+   "end": 4.36,
+   "text": "The other voice snapped with a harsh urgency, clearly used to command.",
+   "checks": [
+    {
+     "t": 4.704,
+     "prob": 0.4521,
+     "infer_ms": 52.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/051.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.54,
+   "text": "The other voice snapped with ...",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.0285,
+     "infer_ms": 41.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/051.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.9,
+   "text": "The other voice snapped with a harsh urgency, clearly used ...",
+   "checks": [
+    {
+     "t": 4.224,
+     "prob": 0.0905,
+     "infer_ms": 26.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/052.wav",
+   "kind": "complete",
+   "end": 7.72,
+   "text": "I'm here because the matter is of utmost importance and brand is the one I must see. Now stand aside.\"",
+   "checks": [
+    {
+     "t": 3.648,
+     "prob": 0.9862,
+     "infer_ms": 16.6,
+     "final": false
+    },
+    {
+     "t": 7.552,
+     "prob": 0.4406,
+     "infer_ms": 18.7,
+     "final": false
+    }
+   ]
+  },
+  {
+   "file": "data/clips/052.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.16,
+   "text": "I'm here because the matter is of utmost importance and brand is the one I ...",
+   "checks": [
+    {
+     "t": 3.648,
+     "prob": 0.9862,
+     "infer_ms": 17.7,
+     "final": false
+    },
+    {
+     "t": 5.44,
+     "prob": 0.0064,
+     "infer_ms": 16.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/052.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.76,
+   "text": "I'm here because the matter is of utmost importance and brand is ...",
+   "checks": [
+    {
+     "t": 3.648,
+     "prob": 0.9862,
+     "infer_ms": 15.5,
+     "final": false
+    },
+    {
+     "t": 5.12,
+     "prob": 0.0059,
+     "infer_ms": 18.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/054.wav",
+   "kind": "complete",
+   "end": 7.02,
+   "text": "He must have drawn his gun, because the intruder said quickly, put that away, you're being a fool! Out!",
+   "checks": [
+    {
+     "t": 3.84,
+     "prob": 0.0098,
+     "infer_ms": 22.8,
+     "final": false
+    },
+    {
+     "t": 6.144,
+     "prob": 0.3296,
+     "infer_ms": 20.8,
+     "final": false
+    },
+    {
+     "t": 7.296,
+     "prob": 0.0057,
+     "infer_ms": 21.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/054.wav",
+   "kind": "incomplete-function-word",
+   "end": 4.36,
+   "text": "He must have drawn his gun, because the intruder said quickly, put that ...",
+   "checks": [
+    {
+     "t": 3.84,
+     "prob": 0.0098,
+     "infer_ms": 27.6,
+     "final": false
+    },
+    {
+     "t": 4.64,
+     "prob": 0.0061,
+     "infer_ms": 20.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/054.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.36,
+   "text": "He must have drawn his gun, because the intruder said quickly, put that ...",
+   "checks": [
+    {
+     "t": 3.84,
+     "prob": 0.0098,
+     "infer_ms": 30.1,
+     "final": false
+    },
+    {
+     "t": 4.64,
+     "prob": 0.0061,
+     "infer_ms": 21.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/055.wav",
+   "kind": "complete",
+   "end": 5.08,
+   "text": "There was silence then, and still wondering, Brienne was once more asleep.",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.3721,
+     "infer_ms": 18.5,
+     "final": false
+    },
+    {
+     "t": 3.52,
+     "prob": 0.3007,
+     "infer_ms": 16.5,
+     "final": false
+    },
+    {
+     "t": 5.408,
+     "prob": 0.3722,
+     "infer_ms": 18.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/055.wav",
+   "kind": "incomplete-function-word",
+   "end": 4.18,
+   "text": "There was silence then, and still wondering, Brienne was ...",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.3721,
+     "infer_ms": 18.7,
+     "final": false
+    },
+    {
+     "t": 3.52,
+     "prob": 0.3007,
+     "infer_ms": 17.9,
+     "final": false
+    },
+    {
+     "t": 4.48,
+     "prob": 0.0067,
+     "infer_ms": 14.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/055.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.42,
+   "text": "There was silence then, and still wondering, Brienne was once ...",
+   "checks": [
+    {
+     "t": 1.888,
+     "prob": 0.3721,
+     "infer_ms": 13.7,
+     "final": false
+    },
+    {
+     "t": 3.52,
+     "prob": 0.3007,
+     "infer_ms": 13.7,
+     "final": false
+    },
+    {
+     "t": 4.736,
+     "prob": 0.0082,
+     "infer_ms": 15.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/057.wav",
+   "kind": "complete",
+   "end": 2.96,
+   "text": "He asked the handler who was kneading his aching muscles.",
+   "checks": [
+    {
+     "t": 3.232,
+     "prob": 0.4635,
+     "infer_ms": 15.2,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/057.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.52,
+   "text": "He asked the handler who was ...",
+   "checks": [
+    {
+     "t": 1.792,
+     "prob": 0.0532,
+     "infer_ms": 14.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/057.wav",
+   "kind": "incomplete-any-word",
+   "end": 1.12,
+   "text": "He asked the handler ...",
+   "checks": [
+    {
+     "t": 1.44,
+     "prob": 0.034,
+     "infer_ms": 14.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/058.wav",
+   "kind": "complete",
+   "end": 5.2,
+   "text": "A red -haired mountain of a man with an apparently inexhaustible store of energy.",
+   "checks": [
+    {
+     "t": 2.4,
+     "prob": 0.9297,
+     "infer_ms": 18.5,
+     "final": false
+    },
+    {
+     "t": 5.504,
+     "prob": 0.9853,
+     "infer_ms": 19.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/058.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.76,
+   "text": "A red -haired mountain of a ...",
+   "checks": [
+    {
+     "t": 2.048,
+     "prob": 0.9103,
+     "infer_ms": 17.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/058.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.78,
+   "text": "A red -haired mountain of a man with ...",
+   "checks": [
+    {
+     "t": 2.4,
+     "prob": 0.9297,
+     "infer_ms": 14.8,
+     "final": false
+    },
+    {
+     "t": 3.072,
+     "prob": 0.0128,
+     "infer_ms": 15.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/059.wav",
+   "kind": "complete",
+   "end": 4.06,
+   "text": "There could be little art in this last and final round of fencing.",
+   "checks": [
+    {
+     "t": 4.384,
+     "prob": 0.8361,
+     "infer_ms": 14.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/059.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.86,
+   "text": "There could be little art in this last and ...",
+   "checks": [
+    {
+     "t": 3.168,
+     "prob": 0.1263,
+     "infer_ms": 13.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/059.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.28,
+   "text": "There could be little art in this last and final ...",
+   "checks": [
+    {
+     "t": 3.552,
+     "prob": 0.1898,
+     "infer_ms": 13.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/060.wav",
+   "kind": "complete",
+   "end": 3.52,
+   "text": "Just thrust and parry and victory to the stronger.",
+   "checks": [
+    {
+     "t": 2.304,
+     "prob": 0.3078,
+     "infer_ms": 16.2,
+     "final": false
+    },
+    {
+     "t": 3.872,
+     "prob": 0.8904,
+     "infer_ms": 19.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/060.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.24,
+   "text": "Just thrust and parry and victory to the ...",
+   "checks": [
+    {
+     "t": 2.304,
+     "prob": 0.3078,
+     "infer_ms": 17.7,
+     "final": false
+    },
+    {
+     "t": 3.584,
+     "prob": 0.0125,
+     "infer_ms": 15.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/060.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.24,
+   "text": "Just thrust and parry ...",
+   "checks": [
+    {
+     "t": 2.304,
+     "prob": 0.3079,
+     "infer_ms": 14.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/061.wav",
+   "kind": "complete",
+   "end": 3.94,
+   "text": "Every man who entered the twenties had his own training tricks.",
+   "checks": [
+    {
+     "t": 2.656,
+     "prob": 0.0687,
+     "infer_ms": 20.5,
+     "final": false
+    },
+    {
+     "t": 4.288,
+     "prob": 0.9308,
+     "infer_ms": 15.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/061.wav",
+   "kind": "incomplete-function-word",
+   "end": 1.72,
+   "text": "Every man who entered the ...",
+   "checks": [
+    {
+     "t": 2.048,
+     "prob": 0.1336,
+     "infer_ms": 13.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/061.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.8,
+   "text": "Every man who entered the twenties had ...",
+   "checks": [
+    {
+     "t": 2.656,
+     "prob": 0.0687,
+     "infer_ms": 15.6,
+     "final": false
+    },
+    {
+     "t": 3.072,
+     "prob": 0.008,
+     "infer_ms": 21.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/062.wav",
+   "kind": "complete",
+   "end": 7.72,
+   "text": "There appeared to be an immediate association with the death drama as if the two were inextricably linked into one.",
+   "checks": [
+    {
+     "t": 4.768,
+     "prob": 0.006,
+     "infer_ms": 17.2,
+     "final": false
+    },
+    {
+     "t": 8.0,
+     "prob": 0.522,
+     "infer_ms": 15.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/062.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.38,
+   "text": "There appeared to be an immediate association with the death drama as if the ...",
+   "checks": [
+    {
+     "t": 4.768,
+     "prob": 0.006,
+     "infer_ms": 20.5,
+     "final": false
+    },
+    {
+     "t": 5.696,
+     "prob": 0.0123,
+     "infer_ms": 13.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/062.wav",
+   "kind": "incomplete-any-word",
+   "end": 6.78,
+   "text": "There appeared to be an immediate association with the death drama as if the two were inextricably ...",
+   "checks": [
+    {
+     "t": 4.768,
+     "prob": 0.006,
+     "infer_ms": 14.0,
+     "final": false
+    },
+    {
+     "t": 7.072,
+     "prob": 0.9581,
+     "infer_ms": 14.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/063.wav",
+   "kind": "complete",
+   "end": 7.9,
+   "text": "The strength that enables someone in a trance to hold his body stiff and unsupported except at two points, the head and heels.",
+   "checks": [
+    {
+     "t": 6.72,
+     "prob": 0.3591,
+     "infer_ms": 19.7,
+     "final": false
+    },
+    {
+     "t": 8.224,
+     "prob": 0.8085,
+     "infer_ms": 13.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/063.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.66,
+   "text": "The strength that enables someone in a trance to hold his body stiff and unsupported except at ...",
+   "checks": [
+    {
+     "t": 5.952,
+     "prob": 0.982,
+     "infer_ms": 14.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/063.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.52,
+   "text": "The strength that enables someone in a trance to hold his body ...",
+   "checks": [
+    {
+     "t": 3.84,
+     "prob": 0.9566,
+     "infer_ms": 18.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/064.wav",
+   "kind": "complete",
+   "end": 2.84,
+   "text": "This is physically impossible when conscious.",
+   "checks": [
+    {
+     "t": 3.168,
+     "prob": 0.9341,
+     "infer_ms": 16.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/064.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.36,
+   "text": "This is physically impossible when ...",
+   "checks": [
+    {
+     "t": 2.656,
+     "prob": 0.9345,
+     "infer_ms": 13.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/064.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.36,
+   "text": "This is physically impossible when ...",
+   "checks": [
+    {
+     "t": 2.656,
+     "prob": 0.9345,
+     "infer_ms": 15.6,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/065.wav",
+   "kind": "complete",
+   "end": 7.96,
+   "text": "Others had died before during the 20s and death during the last round was in some ways easier than defeat.",
+   "checks": [
+    {
+     "t": 8.288,
+     "prob": 0.969,
+     "infer_ms": 16.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/065.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.68,
+   "text": "Others had died before during the 20s and death during the last round was ...",
+   "checks": [
+    {
+     "t": 5.952,
+     "prob": 0.0058,
+     "infer_ms": 18.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/065.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.94,
+   "text": "Others had died before during the 20s ...",
+   "checks": [
+    {
+     "t": 3.264,
+     "prob": 0.9889,
+     "infer_ms": 15.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/066.wav",
+   "kind": "complete",
+   "end": 5.92,
+   "text": "Breathing deeply, Brion softly spoke the auto -hypnotic phrases that triggered the process.",
+   "checks": [
+    {
+     "t": 1.76,
+     "prob": 0.9884,
+     "infer_ms": 15.3,
+     "final": false
+    },
+    {
+     "t": 6.272,
+     "prob": 0.7723,
+     "infer_ms": 14.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/066.wav",
+   "kind": "incomplete-function-word",
+   "end": 5.0,
+   "text": "Breathing deeply, Brion softly spoke the auto -hypnotic phrases that ...",
+   "checks": [
+    {
+     "t": 1.76,
+     "prob": 0.9884,
+     "infer_ms": 14.2,
+     "final": false
+    },
+    {
+     "t": 5.312,
+     "prob": 0.1952,
+     "infer_ms": 13.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/066.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.7,
+   "text": "Breathing deeply, Brion softly spoke the auto ...",
+   "checks": [
+    {
+     "t": 1.76,
+     "prob": 0.9884,
+     "infer_ms": 14.7,
+     "final": false
+    },
+    {
+     "t": 4.0,
+     "prob": 0.9511,
+     "infer_ms": 14.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/067.wav",
+   "kind": "complete",
+   "end": 5.9,
+   "text": "When the buzzer sounded, he pulled his foil from his second startled grasp and ran forward.",
+   "checks": [
+    {
+     "t": 6.176,
+     "prob": 0.8619,
+     "infer_ms": 20.7,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/067.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.46,
+   "text": "When the buzzer sounded, he pulled his ...",
+   "checks": [
+    {
+     "t": 2.784,
+     "prob": 0.1988,
+     "infer_ms": 14.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/067.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.46,
+   "text": "When the buzzer sounded, he pulled his ...",
+   "checks": [
+    {
+     "t": 2.784,
+     "prob": 0.1988,
+     "infer_ms": 16.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/068.wav",
+   "kind": "complete",
+   "end": 4.9,
+   "text": "I rolled the maze at the sudden fury of the attack, then smiled.",
+   "checks": [
+    {
+     "t": 4.064,
+     "prob": 0.4737,
+     "infer_ms": 20.4,
+     "final": false
+    },
+    {
+     "t": 5.248,
+     "prob": 0.4995,
+     "infer_ms": 14.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/068.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.22,
+   "text": "I rolled the maze at the sudden fury of the ...",
+   "checks": [
+    {
+     "t": 3.52,
+     "prob": 0.013,
+     "infer_ms": 14.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/068.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.16,
+   "text": "I rolled the maze at ...",
+   "checks": [
+    {
+     "t": 2.464,
+     "prob": 0.0081,
+     "infer_ms": 14.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/069.wav",
+   "kind": "complete",
+   "end": 6.12,
+   "text": "He thought it was the last burst of energy. He knew how close they both were to exhaustion.",
+   "checks": [
+    {
+     "t": 3.072,
+     "prob": 0.9843,
+     "infer_ms": 17.9,
+     "final": false
+    },
+    {
+     "t": 6.464,
+     "prob": 0.9827,
+     "infer_ms": 18.3,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/069.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.22,
+   "text": "He thought it was the last burst of ...",
+   "checks": [
+    {
+     "t": 2.528,
+     "prob": 0.101,
+     "infer_ms": 15.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/069.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.3,
+   "text": "He thought it was the last burst of energy. He knew how ...",
+   "checks": [
+    {
+     "t": 3.072,
+     "prob": 0.9843,
+     "infer_ms": 14.8,
+     "final": false
+    },
+    {
+     "t": 4.672,
+     "prob": 0.0064,
+     "infer_ms": 17.8,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/070.wav",
+   "kind": "complete",
+   "end": 6.48,
+   "text": "Brian saw something close to panic on his opponent's face when the man finally recognized his error.",
+   "checks": [
+    {
+     "t": 6.752,
+     "prob": 0.3037,
+     "infer_ms": 16.0,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/070.wav",
+   "kind": "incomplete-function-word",
+   "end": 2.78,
+   "text": "Brian saw something close to panic on his ...",
+   "checks": [
+    {
+     "t": 3.072,
+     "prob": 0.0161,
+     "infer_ms": 14.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/070.wav",
+   "kind": "incomplete-any-word",
+   "end": 3.54,
+   "text": "Brian saw something close to panic on his opponent's face ...",
+   "checks": [
+    {
+     "t": 3.808,
+     "prob": 0.2629,
+     "infer_ms": 18.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/071.wav",
+   "kind": "complete",
+   "end": 6.4,
+   "text": "A wave of despair rolled out from Eirog, riansensed it, and knew the fifth point was his.",
+   "checks": [
+    {
+     "t": 3.136,
+     "prob": 0.986,
+     "infer_ms": 18.5,
+     "final": false
+    },
+    {
+     "t": 6.72,
+     "prob": 0.0069,
+     "infer_ms": 15.5,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/071.wav",
+   "kind": "incomplete-function-word",
+   "end": 4.62,
+   "text": "A wave of despair rolled out from Eirog, riansensed it, and ...",
+   "checks": [
+    {
+     "t": 3.136,
+     "prob": 0.986,
+     "infer_ms": 17.3,
+     "final": false
+    },
+    {
+     "t": 4.896,
+     "prob": 0.0061,
+     "infer_ms": 14.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/071.wav",
+   "kind": "incomplete-any-word",
+   "end": 4.62,
+   "text": "A wave of despair rolled out from Eirog, riansensed it, and ...",
+   "checks": [
+    {
+     "t": 3.136,
+     "prob": 0.986,
+     "infer_ms": 17.4,
+     "final": false
+    },
+    {
+     "t": 4.896,
+     "prob": 0.0061,
+     "infer_ms": 18.9,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/072.wav",
+   "kind": "complete",
+   "end": 4.14,
+   "text": "Then the powerful twist that's rested aside. In and under the guard.",
+   "checks": [
+    {
+     "t": 3.2,
+     "prob": 0.9571,
+     "infer_ms": 16.7,
+     "final": false
+    },
+    {
+     "t": 4.416,
+     "prob": 0.0082,
+     "infer_ms": 21.1,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/072.wav",
+   "kind": "incomplete-function-word",
+   "end": 3.52,
+   "text": "Then the powerful twist that's rested aside. In and ...",
+   "checks": [
+    {
+     "t": 3.2,
+     "prob": 0.9571,
+     "infer_ms": 14.9,
+     "final": false
+    },
+    {
+     "t": 3.808,
+     "prob": 0.0117,
+     "infer_ms": 15.4,
+     "final": true
+    }
+   ]
+  },
+  {
+   "file": "data/clips/072.wav",
+   "kind": "incomplete-any-word",
+   "end": 2.02,
+   "text": "Then the powerful twist that's ...",
+   "checks": [
+    {
+     "t": 2.368,
+     "prob": 0.3295,
+     "infer_ms": 14.0,
+     "final": true
+    }
+   ]
+  }
+ ]
+}

@@ -9,6 +9,7 @@ nvidia-cudnn-cu12==9.*
 nvidia-cuda-runtime-cu12
 nvidia-cufft-cu12
 nvidia-curand-cu12
+transformers
 soundfile
 numpy
 pyarrow
