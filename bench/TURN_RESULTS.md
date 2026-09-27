@@ -44,3 +44,37 @@ Raising the threshold trades early cuts for slower replies: at 0.9, early cuts f
 
 ## Bugs caught while building this
 - Smart Turn expects **start-padding** (`smart-turn/audio_utils.py`). Letting the Whisper feature extractor pad at the end put the turn end in the middle of the window and made scores meaningless. `bench_turn.py` pads at the start.
+
+## Owner's real speech (2026-09-27, same day)
+
+The owner recorded 3 answers to Jester-style prompts with the local recorder page (`recorder/`). That is 118 s total: a long ramble, a Zoro instruction with a mid-sentence change of mind, and a question plus a request. Recorded in the browser with noise suppression on, not through Discord Opus. The audio and transcripts stay local (`data/owner/`, gitignored, because the repo is public).
+
+Every pause inside a recording is a place where the owner **kept talking**, so a reply there would have cut him off. The end of each recording is a real finished turn.
+
+### Pauses
+- **35 mid-turn pauses**: median 0.61 s, p75 0.86 s, p90 1.45 s.
+- Longest: **5.9 s**, straight after "I want you to…".
+- 15 of the 35 pauses came right after a filler or connector word ("um", "like", "to", "the", "then", "basically"…).
+
+### Plain silence timeout would cut him off
+- 0.5 s: 23/35 pauses
+- 0.8 s: 15/35
+- 1.0 s: 8/35
+- 1.5 s: 4/35
+- 2.0 s: 2/35
+
+### Smart Turn v3.2 (GPU) does far better on real speech than on audiobooks
+- At threshold 0.5 it wrongly cut in on **1/35** pauses: a 0.5 s pause mid-sentence after a noun. Almost all mid-turn pauses scored below 0.1, including the 5.9 s one (0.014).
+- It detected **2/3 finished turns** (0.69 and 0.55). The miss was the long ramble, which trailed off ("…and stuff like that") and scored 0.01. That one would fall back to the timeout.
+- At threshold 0.7 or higher it catches no finished turns. **The threshold must stay around 0.5.**
+
+### Speech-to-text on the owner's voice
+- Parakeet v2 correctly heard "Zoro", "Nami" and "Go Work", and dropped most "um/uh".
+- Whisper large-v3-turbo made up a trailing "Thank you." (the known Whisper silence habit) and wrote "Zorro".
+- **Parakeet is confirmed as the STT pick.**
+
+### Updated turn-detection design
+- **Smart Turn GPU at threshold 0.5** is the main signal. On real speech it rarely interrupts.
+- **Fallback timeout when Smart Turn isn't sure:** about 1.5–2 s normally. Extend to about 6–8 s when Smart Turn is very low (<0.05) *and* the last word is a connector ("to", "the", "and", "with"…). That covers the 5.9 s "I want you to…" pause.
+- **Speculative brain start** at each pause stays in the design to hide latency, but Jester only speaks once the turn is confirmed.
+- **Caveat:** 35 pauses and 3 turns is a small sample. Re-check during the first live Discord tests, and log every cut-in.

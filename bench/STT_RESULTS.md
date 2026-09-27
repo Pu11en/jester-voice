@@ -26,3 +26,9 @@ Setup:
 - The driver is 576.28, which supports CUDA 12.9 only. `onnxruntime-gpu` ≥1.24 is built for CUDA 13 and silently fails to load its CUDA provider (`libcublasLt.so.13`), so it is **pinned to 1.23.x**.
 - CUDA/cuDNN come from pip `nvidia-*-cu12` wheels inside `bench/.venv` (2.8 GB). Nothing was installed system-wide, and the EBI voice worker's Python was not touched.
 - The pip `nvidia` libs are not on the loader path, so `bench_stt.py` preloads them (`add_nvidia_libs`).
+
+## Owner's real voice (3 recordings, 118 s)
+
+- **Parakeet v2 (GPU)** got the EBI words right ("Zoro", "Nami", "Go Work"). It took 148–168 ms for 20–30 s recordings.
+- **Whisper large-v3-turbo** made up a trailing "Thank you." and wrote "Zorro".
+- There is no hand-checked word-by-word transcript, so this is a spot check, not an error rate. **Parakeet is still the pick.** Details are in TURN_RESULTS.md.
