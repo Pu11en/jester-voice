@@ -49,14 +49,14 @@ Raising the threshold trades early cuts for slower replies: at 0.9, early cuts f
 
 The owner recorded 3 answers to Jester-style prompts with the local recorder page (`recorder/`). That is 118 s total: a long ramble, a Zoro instruction with a mid-sentence change of mind, and a question plus a request. Recorded in the browser with noise suppression on, not through Discord Opus. The audio and transcripts stay local (`data/owner/`, gitignored, because the repo is public).
 
-Every pause inside a recording is a place where the owner **kept talking**, so a reply there would have cut him off. The end of each recording is a real finished turn.
+Every pause inside a recording is a place where the owner **kept talking**, so a reply there would have cut the owner off. The end of each recording is a real finished turn.
 
 ### Pauses
 - **35 mid-turn pauses**: median 0.61 s, p75 0.86 s, p90 1.45 s.
 - Longest: **5.9 s**, straight after "I want you to…".
 - 15 of the 35 pauses came right after a filler or connector word ("um", "like", "to", "the", "then", "basically"…).
 
-### Plain silence timeout would cut him off
+### Plain silence timeout would cut the owner off
 - 0.5 s: 23/35 pauses
 - 0.8 s: 15/35
 - 1.0 s: 8/35
