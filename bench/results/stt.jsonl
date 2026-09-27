@@ -1,0 +1,5 @@
+{"engine": "fw-small-en-gpu", "clips": 73, "audio_sec": 481.0, "load_sec": 1.2, "wer_pct": 5.3, "lat_mean_ms": 188, "lat_p90_ms": 271, "lat_short_clips_mean_ms": 132, "rtfx": 35.0, "vram_peak_mb": 1182}
+{"engine": "fw-turbo-gpu", "clips": 73, "audio_sec": 481.0, "load_sec": 28.2, "wer_pct": 3.91, "lat_mean_ms": 331, "lat_p90_ms": 404, "lat_short_clips_mean_ms": 294, "rtfx": 19.9, "vram_peak_mb": 2430}
+{"engine": "fw-small-en-cpu", "clips": 73, "audio_sec": 481.0, "load_sec": 1.8, "wer_pct": 5.57, "lat_mean_ms": 2336, "lat_p90_ms": 2957, "lat_short_clips_mean_ms": 2052, "rtfx": 2.8, "vram_peak_mb": 531}
+{"engine": "parakeet-v2-gpu", "clips": 73, "audio_sec": 481.0, "load_sec": 15.6, "wer_pct": 2.87, "lat_mean_ms": 128, "lat_p90_ms": 161, "lat_short_clips_mean_ms": 114, "rtfx": 51.6, "vram_peak_mb": 3997}
+{"engine": "parakeet-v2-cpu", "clips": 73, "audio_sec": 481.0, "load_sec": 24.2, "wer_pct": 2.87, "lat_mean_ms": 784, "lat_p90_ms": 1372, "lat_short_clips_mean_ms": 475, "rtfx": 8.4, "vram_peak_mb": 531}
