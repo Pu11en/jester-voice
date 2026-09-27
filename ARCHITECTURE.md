@@ -1,105 +1,152 @@
-# Architecture
+# Jester Voice — Architecture Direction
 
-## Components
+`HANDOFF.md` is the source of truth. This file captures the intended component boundaries without prematurely choosing every local voice dependency.
+
+## High-level architecture
 
 ```text
-Discord Gateway / Voice
-  |  incoming user audio
+Discord Voice
+  |
+  | per-user incoming audio / outgoing Jester audio
   v
-DiscordAudioIngress
-  |  normalized PCM/audio frames
+Jester Voice Runtime
+  |-- speaker identity / owner priority
+  |-- VAD + end-of-turn detection
+  |-- STT
+  |-- streaming playback + barge-in
+  |-- TTS
+  |
   v
-LiveSession ------------------------------+
-  |                                       |
-  | OpenAI realtime events               | tool/delegation requests
-  v                                       v
-OpenAI Live Voice                    EbiAdapter
-  |                                       |
-  | generated audio / events              v
-  v                                  Existing EBI
-DiscordAudioEgress                       |
-  |                                       |
-  +-------------- spoken result <---------+
+Conversation Runtime
+  |-- recent conversational context
+  |-- canonical resolved session references
+  |-- BrainAdapter
+  |      `-- Codex subscription / GPT-6 Luna candidate
+  |
+  v
+Jester Control
+  |-- authorization / temporary grants
+  |-- typed action validation
+  |-- event queue / proactive notifications
+  |-- EBI adapter
+  |
+  v
+Existing EBI / ccdb
+  |-- sessions / threads
+  |-- temporary One Piece tags
+  |-- folders / projects
+  |-- models / backends
+  |-- history / memory
+  `-- task/status events
 ```
 
-## Separation of concerns
+## Core rule
 
-### Discord layer
-Owns Discord authentication, commands, voice channel lifecycle, current Discord voice encryption requirements, inbound user audio, and outbound bot audio.
+The brain interprets. Deterministic code authorizes, resolves, validates, executes and verifies.
 
-### Live session layer
-Owns one active conversational session, OpenAI realtime connection, turn/interruption state, audio queues, session reset, and conversion between Discord audio and API audio formats.
+Do not let the LLM become the source of truth for current sessions, permissions, tags, task status or history.
 
-### EBI adapter
-Owns delegation into the existing EBI system. It should expose a small typed interface rather than leaking EBI internals into the audio code.
+## Voice engine boundary
 
-Illustrative interface:
+Keep the voice runtime modular enough to support either:
+
+1. a reusable open-source realtime speech pipeline/engine (evaluate Hugging Face `speech-to-speech` and strong AllGit discoveries), or
+2. a purpose-built Jester pipeline assembled from benchmarked VAD/turn/STT/TTS components.
+
+The machine benchmark decides. Do not force architecture because a candidate was mentioned during planning.
+
+Required interfaces conceptually:
 
 ```ts
-export interface EbiAdapter {
-  run(input: {
-    request: string;
-    project?: string;
-    conversationId: string;
-  }): Promise<{
-    summary: string;
-    data?: unknown;
-  }>;
+interface TurnDetector {
+  pushAudio(frame: AudioFrame): Promise<TurnSignal[]>;
+}
+
+interface SpeechRecognizer {
+  transcribe(turn: AudioTurn): Promise<Transcript>;
+}
+
+interface BrainAdapter {
+  stream(input: BrainInput): AsyncIterable<BrainEvent>;
+}
+
+interface SpeechSynthesizer {
+  stream(text: AsyncIterable<string> | string): AsyncIterable<AudioFrame>;
+  cancel(): Promise<void>;
 }
 ```
 
-This exact signature can change after inspecting the live EBI integration surface; the architectural boundary should not.
+Exact language/signatures can change after benchmarking.
+
+## Jester Control boundary
+
+Jester Control should expose typed capabilities rather than arbitrary generated commands. Illustrative operations:
+
+```ts
+listActiveSessions()
+resolveCurrentTag(tag)
+getSessionStatus(sessionId)
+messageSession(sessionId, message)
+createSession(request)
+stopSession(sessionId)
+getRelevantHistory(query)
+setSessionModel(sessionId, model)
+setSessionBackend(sessionId, backend)
+grantTemporaryPermission(grant)
+revokeTemporaryPermission(grantId)
+```
+
+Only implement operations supported by current EBI/ccdb. Prefer adapting existing control-plane endpoints over duplicating EBI mechanics.
+
+## Session references
+
+A current spoken tag is resolved to a canonical session ID. Conversation context stores that canonical reference so pronouns remain safe even if tag assignment later changes.
+
+Historical lookup does not assume tag persistence. It searches EBI history using the user's contextual clues.
 
 ## Interruption model
 
-When user speech begins while Jester is speaking:
+Barge-in is a first-class path:
 
-1. Detect/receive the new user turn.
-2. Cancel/truncate the active generated response according to the current OpenAI realtime protocol.
-3. Immediately stop/clear queued Discord playback associated with the cancelled response.
-4. Continue sending the new user audio.
-5. Keep conversation state aligned with what the user actually heard.
+1. detect real user speech while Jester is speaking;
+2. stop outbound playback immediately;
+3. cancel queued TTS/audio;
+4. mark only actually-played response content as heard;
+5. capture the new user turn;
+6. continue conversation from that reality.
 
-This is a core requirement, not optional polish.
+Do not wait for STT or brain completion before stopping playback.
 
-## Audio rules
+## Event model
 
-- Avoid repeated disk writes in the realtime path.
-- Keep the pipeline streaming and bounded.
-- Resample only where required.
-- Do not feed the bot's own output back as user input.
-- Apply bounded queues/backpressure so a slow network does not grow memory indefinitely.
-- Prefer explicit frame timestamps/sequence tracking where the selected Discord voice library makes them available.
+EBI should push or expose deterministic meaningful events. Do not poll the brain for status.
 
-## Session model
+Jester queues events and delivers them based on priority and conversational timing. While the owner is absent, event collection should require no brain calls.
 
-Start simple: one active Discord voice context per bot process for V1. Design classes so per-guild sessions can be introduced later without global mutable audio state.
+## Permissions
 
-A session owns:
+Authorization is based on Discord user identity.
 
-- Discord guild/channel/user context
-- OpenAI realtime connection
-- current project/context selection
-- inbound audio queue
-- outbound playback queue
-- current response/cancellation state
-- timestamps/health metrics
+Owner privileges and temporary guest grants live in deterministic state outside the LLM. A model-produced request is never sufficient authorization by itself.
 
-## Failure behavior
+## Persistence / recovery
 
-- Discord disconnect: stop audio cleanly and attempt bounded reconnect where appropriate.
-- OpenAI disconnect: stop claiming the bot is listening/responding; reconnect and create a fresh/continued session according to supported API semantics.
-- EBI task failure: return a concise conversational error without killing the voice session.
-- Missing credentials: fail fast at startup with the missing variable name, never print secret values.
+Persist only state Jester cannot reconstruct safely. Canonical EBI/session truth is rebuilt from EBI after restart.
 
-## Security
+Likely Jester-owned persistence:
+- temporary permission grants if they must survive a process crash within the same voice presence;
+- queued meaningful events/catch-up state;
+- minimal runtime/session metadata needed for recovery;
+- observability/benchmark data.
 
-- `.env` ignored.
-- Never log bot tokens/API keys/auth headers.
-- EBI delegation should use allowlisted operations/capabilities.
-- Treat spoken user input as untrusted input.
-- Avoid arbitrary shell execution from model-generated strings.
+Do not use LLM context as infrastructure persistence.
+
+## Existing EBI voice code
+
+Inspect `ebi-agent-chat-relay/extensions/voice_transcripts` for useful proven implementation details such as Discord receive, speaker separation, local faster-whisper and control-plane calls. It is reference material only. Jester's desired behavior comes from `HANDOFF.md`.
 
 ## Deployment
 
-V1 should run locally first. Add Docker support after the local loop is proven. The service needs stable outbound network access and a Discord voice implementation compatible with Discord's current encrypted voice/DAVE requirements.
+Local-first. Auto-restart is required because the owner's computer crashes/restarts frequently. Docker with an appropriate restart policy is a candidate, but choose the host/container split after inspecting Codex authentication and local acceleration.
+
+Do not containerize merely for aesthetics if it harms GPU access, latency or subscription authentication.
