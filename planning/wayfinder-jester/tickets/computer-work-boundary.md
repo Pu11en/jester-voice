@@ -1,7 +1,7 @@
 # Ticket: Who actually performs computer work requested by voice?
 
 - `wayfinder:grilling` (HITL)
-- Frontier: YES (2026-09-28)
+- Frontier: RESOLVED (2026-09-28)
 - Research: [computer-access boundary](../research/computer-access-boundary.md)
 
 ## Question
@@ -11,3 +11,7 @@ When Drew asks Jester to inspect a project, change files, browse, or run a task,
 ## Recommendation
 
 Use EBI sessions for file, app, browser, and shell work; let Jester make narrow read-only EBI status/history checks itself. This gives Drew hands-free control of complete work sessions while keeping their execution and recovery in the existing agent system. The alternative boundaries and evidence are in the research note. No overnight build task has started.
+
+## Decision
+
+Drew chose A. Jester is the conversational voice front end: it identifies the real speaker, determines the intended live EBI session or project, sends the completed task through a typed EBI action, and reports verified status. The EBI session performs project/computer work. Jester may use narrow read-only EBI status/history lookups and may write its own operational state/transcripts. This choice preserves a spoken task's intended authority as a typed instruction; it does not make Jester a second computer-working agent.

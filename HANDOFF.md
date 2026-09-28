@@ -20,6 +20,8 @@ The owner also wants an explicit **transcript-only mode**: `Jester, just listen`
 
 **Direct session tags (owner choice C, 2026-09-28):** during an active Jester conversation, an explicit instruction such as `Zoro, fix the login bug` may address that session directly without repeating `Jester`. Resolve the tag to the exact live EBI thread and apply the normal identity, intent, and action checks. A mere mention of a tag is not an instruction. When Jester is dormant after a lull, a tag alone does not wake it, call Luna, or send work; Drew must say `Jester` to start a new conversation. Transcript-only mode blocks tag actions even if the conversation was previously active.
 
+**Computer-work boundary (owner choice A, 2026-09-28):** Jester is the voice interface and deterministic action gate. EBI sessions perform project file, app, browser, shell, and other computer work requested through Jester, just as they would for a typed task. Jester may use narrow, authorized, read-only EBI status/history calls and persist its own transcript/operational state. Luna receives no general computer tool. A spoken work request should be routed to the exact session and reported from real EBI receipts/state, without imposing a new typed-confirmation rule on clear owner instructions.
+
 ## Mission
 
 Build a separate Discord voice bot/service called Jester that lets the owner operate and navigate the existing EBI/ccdb agent environment almost entirely by natural spoken conversation.
