@@ -10,6 +10,7 @@ const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(c
 const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
 const HISTORY = /^(?:find|look up|search for)(?: the)? (?:session|thread)(?: where we| that| about| for)? (.+?)[?.!]*$/iu;
 const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|completes)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
+const WHEN_BOTH = new RegExp(`^(?:when|after)\\s+(?:both\\s+)?${NAME}\\s+and\\s+${NAME}\\s+(?:finish|are done|complete)\\b`, "iu");
 
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw) {
@@ -30,6 +31,7 @@ export function parseOwnerIntent(raw) {
   if (history) return { kind: "history", query: history[1].trim().replace(/^(?:worked on|talked about|did)\s+/iu, "") };
   const when = WHEN.exec(text);
   if (when) return { kind: "dependency", source: when[1], target: when[2], instruction: when[3].trim() };
+  if (WHEN_BOTH.test(text)) return { kind: "unsupported", reason: "combined-results" };
 
   const first = TELL.exec(text) || DIRECT.exec(text);
   if (!first) return null;

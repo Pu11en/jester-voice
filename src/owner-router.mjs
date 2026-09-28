@@ -58,6 +58,9 @@ export class OwnerRouter {
     const intent = parseOwnerIntent(text);
     if (!intent) return null;
     if (intent.kind === "clarify") return "Please say the final task once more so I send the right words.";
+    if (intent.kind === "unsupported" && intent.reason === "combined-results") {
+      return "I can't combine two session results yet, so I won't promise a test list. I can tell you when one session finishes.";
+    }
     if (intent.kind === "status-all") {
       const sessions = (await this.client.snapshot()).filter(s => !s.closed && s.state === "running");
       if (!sessions.length) return "No EBI sessions are running right now.";

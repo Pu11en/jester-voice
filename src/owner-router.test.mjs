@@ -123,6 +123,13 @@ test("follow-on speech stores exact running source and destination IDs", async (
     destinationId: sanji.threadId, task: "run tests" }]);
 });
 
+test("combined-result request gets an honest limitation, not a false promise", async () => {
+  const { router, calls } = setup();
+  assert.match(await router.handle("When both Zoro and Sanji finish, tell me what I can test",
+    { speakerId: ownerId }), /can't combine two session results yet/);
+  assert.equal(calls.length, 0);
+});
+
 test("a just-listen or correction arriving during resolution cancels the pending action", async () => {
   const { router, client, calls } = setup();
   let allowed = true;
