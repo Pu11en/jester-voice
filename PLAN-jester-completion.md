@@ -2,6 +2,7 @@
 
 Current trial findings and the next checked fixes: [Jester voice trial review](REVIEW-jester-trial-2026-09-28.md).
 End-to-end voice-to-EBI readiness and build order: [Jester commander review](COMMANDER-READINESS-2026-09-28.md).
+Owner V1 requirements and proof required before another real-use trial: [complete scope](SCOPE-jester-owner-v1-before-trial.md).
 
 Check: bash scripts/check.sh
 Try: systemctl --user start jester-voice.service

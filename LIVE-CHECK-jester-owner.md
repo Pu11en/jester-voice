@@ -1,5 +1,7 @@
 # Jester owner live-check list
 
+**Hold this live check until the [owner V1 scope and entry checks](SCOPE-jester-owner-v1-before-trial.md) pass.** The first room trial exposed speech, attention, and commander-routing failures; offline component checks alone are insufficient.
+
 These are Drew's first checks after the local build is integrated and the live service is safely updated. Interruption already works and is not a separate first-check item. Guest conversation and guest session control are out of scope.
 
 ## A — Wake and natural follow-ups
