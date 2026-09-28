@@ -25,6 +25,8 @@
 - [Brain](../bench/BRAIN_RESULTS.md): Codex app-server + Luna over the subscription. Streams, interrupts in 5 ms, first word in about 1–2 s when warm.
 - [Replace the old bot](../REPLACES_OLD_VOICE.md): Jester takes over transcripts in the exact `allwork` format and reuses the EBI bot token. It auto-joins with the owner and leaves on "Jester, leave".
 
+- [How can Jester detect EBI session finish/failure with today's API?](wayfinder-jester/tickets/ebi-event-detection-today.md): read ccdb `sessions.db` read-only every 1 s, plus `/api/sessions` every 15 s. Failure is detectable but only heuristically.
+
 ## Not yet specified
 
 - **Phase 2, Jester Control plan:** the typed actions (status, message by tag, spawn, close, model/backend switch, history search) and the permission/grant store. Waits on the feel test, the EBI-changes decision and the event research.
