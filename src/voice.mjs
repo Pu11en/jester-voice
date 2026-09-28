@@ -90,8 +90,8 @@ export function createPlayedTimeTracker(now = () => performance.now()) {
       if (active && newStatus === AudioPlayerStatus.Playing) active.startedAt = time;
       if (newStatus === AudioPlayerStatus.Idle && active) active = null;
     },
-    begin(id) {
-      const track = { total: 0, startedAt: null };
+    begin(id, resource = null) {
+      const track = { total: 0, startedAt: null, resource };
       tracks.set(String(id), track);
       active = track;
     },
@@ -99,7 +99,10 @@ export function createPlayedTimeTracker(now = () => performance.now()) {
       const track = tracks.get(String(id));
       if (!track) return 0;
       const live = track === active && track.startedAt !== null ? now() - track.startedAt : 0;
-      return Math.max(0, Math.round(track.total + live));
+      const activeMs = Math.max(0, Math.round(track.total + live));
+      // The player remains Playing while it bridges sentence gaps with Opus
+      // silence. Resource playbackDuration counts only PCM-backed packets.
+      return track.resource ? Math.min(activeMs, track.resource.playbackDuration) : activeMs;
     },
   };
 }
@@ -123,7 +126,12 @@ export function createVoice({
   now,
 } = {}) {
   if (!config) throw new Error("config is required");
-  const player = voice.createAudioPlayer({ behaviors: { noSubscriber: voice.NoSubscriberBehavior.Pause } });
+  // Luna can pause between completed sentences for longer than Discord's default
+  // five missing frames (100 ms). Keep the resource alive and let the player send
+  // silence packets until the next PCM chunk arrives or the stream actually ends.
+  const player = voice.createAudioPlayer({
+    behaviors: { noSubscriber: voice.NoSubscriberBehavior.Pause, maxMissedFrames: Infinity },
+  });
   const played = createPlayedTimeTracker(now);
   player.on("stateChange", (oldState, newState) => {
     played.transition(oldState.status, newState.status);
@@ -243,8 +251,8 @@ export function createVoice({
     play(id, pcmStream) {
       const stream = Buffer.isBuffer(pcmStream) ? Readable.from([pcmStream]) : pcmStream;
       if (!stream || typeof stream.pipe !== "function") throw new Error("play expects a PCM Readable stream or Buffer");
-      played.begin(id);
       const resource = voice.createAudioResource(stream, { inputType: voice.StreamType.Raw });
+      played.begin(id, resource);
       player.play(resource);
     },
     stopNow() {

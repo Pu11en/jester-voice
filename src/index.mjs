@@ -20,6 +20,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
 } = {}) {
   config ||= await loadConfig();
   const stallClip = await readFile(resolve(projectRoot, "assets/thinking.pcm"));
+  const unavailableClip = await readFile(resolve(projectRoot, "assets/unavailable.pcm"));
   const worker = createWorkerImpl({
     command: config.python,
     args: [resolve(projectRoot, "worker/speech.py")],
@@ -32,7 +33,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const brain = createBrainImpl({});
   const transcript = createTranscriptImpl();
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
-  const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId, presence, transcript, stallClip });
+  const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId, presence, transcript, stallClip, unavailableClip });
 
   let started = false;
   let closing = null;

@@ -116,3 +116,25 @@ test("rejoins after voice transport failure only while the owner remains present
   assert.equal(voice.connects, 2);
   presence.stop();
 });
+
+test("owner arrival, departure and manual leave/rejoin reset conversation attention", async () => {
+  const { client, presence } = setup({ channelId: "room" });
+  let resets = 0;
+  const reasons = [];
+  presence.on("reset", (reason) => { resets++; reasons.push(reason); });
+  await presence.start();
+  assert.equal(resets, 1);
+  await presence.leave();
+  assert.equal(resets, 2);
+  await presence.join();
+  assert.equal(resets, 3);
+  client.emit("voiceStateUpdate", {}, { id: "guest", guild: { id: "guild" }, channelId: null });
+  assert.equal(resets, 3);
+  client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: null });
+  assert.equal(resets, 4);
+  client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: "room" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(resets, 5);
+  assert.deepEqual(reasons, [undefined, "owner_leave", undefined, "owner_departed", undefined]);
+  presence.stop();
+});

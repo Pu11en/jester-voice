@@ -130,7 +130,7 @@ export class Brain extends EventEmitter {
   }
 
   /** Ask Jester and yield completed sentence strings as deltas arrive. */
-  async *ask(text, { speaker } = {}) {
+  async *ask(text, { speaker, requestId } = {}) {
     if (typeof text !== "string" || !text.trim()) throw new TypeError("text must be non-empty");
     const threadId = await this.prewarm();
     if (this.activeTurn) throw new Error("A brain turn is already running");
@@ -186,7 +186,7 @@ export class Brain extends EventEmitter {
             if (!firstWord && /\S/.test(delta)) {
               firstWord = true;
               clearTimeout(stallTimer);
-              this.emit("firstWord", { threadId, speaker, at: Date.now() });
+              this.emit("firstWord", { threadId, speaker, requestId, at: Date.now() });
             }
             remainder += delta;
             let match;

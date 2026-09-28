@@ -1,8 +1,11 @@
+import { EventEmitter } from "node:events";
+
 const LEAVE_PHRASE = /^\s*jester[\s,]+(?:leave|disconnect)\s*[.!?]*\s*$/i;
 
 /** Auto-join and owner escape hatches for one configured Discord voice room. */
-export class Presence {
+export class Presence extends EventEmitter {
   constructor({ client, voice, brain, config, transcript = null, logger = console } = {}) {
+    super();
     if (!client || !voice || !brain || !config) {
       throw new Error("client, voice, brain, and config are required");
     }
@@ -53,6 +56,7 @@ export class Presence {
 
   async join() {
     if (!this.inPresence || this.joined || this.joining) return this.joining;
+    this.emit("reset");
     this.dismissed = false;
     this.joining = Promise.resolve(this.voice.connect())
       .then(async () => {
@@ -73,6 +77,7 @@ export class Presence {
 
   async leave() {
     this.dismissed = true;
+    this.emit("reset", "owner_leave");
     clearTimeout(this.recoveryTimer);
     if (this.joining) await this.joining;
     this.voice.disconnect();
@@ -89,6 +94,7 @@ export class Presence {
     if (present === this.inPresence) return;
     this.inPresence = present;
     if (!present) {
+      this.emit("reset", "owner_departed");
       this.dismissed = false;
       clearTimeout(this.recoveryTimer);
       if (this.joining) await this.joining;

@@ -18,9 +18,14 @@ test("prewarms one thread and yields streamed sentences", async () => {
   try {
     assert.equal(await brain.prewarm(), "fake-thread");
     assert.equal(await brain.prewarm(), "fake-thread");
+    const firstWords = [];
+    brain.on("firstWord", (event) => firstWords.push(event));
     const sentences = [];
-    for await (const sentence of brain.ask("Hi")) sentences.push(sentence);
+    for await (const sentence of brain.ask("Hi", { speaker: "owner", requestId: "voice-turn-1" })) sentences.push(sentence);
     assert.deepEqual(sentences, ["Hello there.", "How can I help?"]);
+    assert.equal(firstWords.length, 1);
+    assert.equal(firstWords[0].requestId, "voice-turn-1");
+    assert.equal(firstWords[0].speaker, "owner");
   } finally {
     await brain.close();
   }

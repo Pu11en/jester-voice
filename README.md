@@ -14,6 +14,28 @@ Jester joins the configured Discord room when the owner enters, listens and spea
 
 ## Use Jester now
 
+The local Drew-only attention slice starts dormant on each join: room speech is
+still transcribed, but only Drew can wake replies by starting with "Jester" or
+"Hey Jester". Name-free follow-ups work for 60 seconds after an accepted turn or
+the end of Jester's spoken answer. Guest speech, tentative pauses, and explicit
+side talk (such as "Hey Alex, ...", "Guys, ...", or "I'm talking to Alex") do not
+extend that window. "That's all", "Thanks, Jester", "Goodbye", or "Never mind"
+end the exchange immediately. After an ending or lull, say Jester again; a bare
+"Zoro, ..." cannot wake it. Guest speech never reaches Luna in this slice.
+
+Say "Jester, just listen" to stop Jester's speech and keep recording room
+transcripts without replies. Only Drew can switch modes. "Jester, talk again"
+restores dormant conversation, so say Jester again for the next question. Owner
+leave controls still work in either mode. The mode resets after Drew leaves the
+room; a transport reconnect during the same visit keeps transcript-only mode.
+The mode gate does not stop audio capture, leaving room for a later recording
+Pause control to override capture itself.
+
+This is a deterministic text gate, not a semantic addressee detector: unmarked
+owner speech within the follow-up window is treated as a follow-up. The 60-second
+window and recognition phrases still need Drew's live feel check. These local
+changes do not restart or update the running service.
+
 As of 2026-09-28, `jester-voice.service` is enabled and running on Drew's computer. Join the configured Discord voice room; Jester auto-joins when the owner enters. Say "Jester, can you hear me?" and talk naturally. To make it leave for the rest of that visit, say "Jester, leave" or type `!jester leave` in the transcript channel. Type `!jester join` there to bring it back while you are in the room.
 
 Jester uses the existing DrewAI bot account, token and owner ID from the EBI env file. It reads room IDs from the old voice settings when no Jester `.env` is present. The old `drew-ai-voice-transcripts.service` is disabled and archived; do not run both voice services in the same server at once. The main EBI Discord bot still runs separately.
