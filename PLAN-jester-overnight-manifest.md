@@ -19,7 +19,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
 
 ## Agreed outcomes
 
-- Natural streaming voice and guest conversation.
+- Natural streaming voice, wake-on-name conversation, transcript-only mode and guest conversation.
 - Replaced transcript channel, recording privacy and retention behavior.
 - Exact EBI session control with real speaker identity and scoped grants.
 - Contextual history, meaningful event updates, simple dependencies and restart recovery.
@@ -153,7 +153,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "id": "jester.04",
       "plan_id": "jester",
       "plan_version": 1,
-      "outcome": "Add conversational attention.. Follow up naturally without a wake word during an active exchange, respond when clearly addressed, and avoid answering ambient room talk as though it were a request. Prefer Drew when voices overlap. Test with mixed owner/guest events. Repo: Jester.",
+      "outcome": "Add conversational attention. On join and after an exchange ends, require an addressed Jester before Luna or speech. Allow natural follow-ups during an active exchange, then re-arm after a lull or clear ending; ambient speech must not extend engagement. Keep all-speaker room transcription independent. Test wake, follow-up, pause, re-arm, side conversation and owner priority with fake brain and mixed-speaker events. Repo: Jester.",
       "dependencies": [
         "jester.03"
       ],
@@ -176,12 +176,38 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "source_requirement": "REQ-VOICE"
     },
     {
+      "id": "jester.04a",
+      "plan_id": "jester",
+      "plan_version": 1,
+      "outcome": "Add transcript-only voice mode. Jester, just listen immediately stops current and queued speech and pending actions; continue transcribing everyone but make no Luna calls, spoken replies or EBI/tag actions. Only Drew can switch modes; Jester, talk again restores dormant conversation. Recognize mode commands deterministically while silent, preserve privacy Pause and leave controls, show mode in the transcript channel, survive a transient reconnect during the same owner presence and reset for a new presence. Test all-speaker transcripts and silence with fake brain and actions. Repo: Jester.",
+      "dependencies": [
+        "jester.04"
+      ],
+      "owned_files": [
+        "src/",
+        "worker/",
+        "scripts/",
+        "tests/",
+        "package.json",
+        "README.md",
+        "deploy/",
+        "DECISIONS-LOG.md"
+      ],
+      "owned_resources": [],
+      "required_inputs": [
+        "REQ-VOICE: Natural, prompt speech and safe guest conversation"
+      ],
+      "output": "Transcript-only mode implemented and checked in its repository copy",
+      "acceptance_check": "bash scripts/check.sh",
+      "source_requirement": "REQ-VOICE"
+    },
+    {
       "id": "jester.05",
       "plan_id": "jester",
       "plan_version": 1,
       "outcome": "Let guests have ordinary conversations.. A guest who addresses Jester can talk and interrupt its reply, while private EBI facts and all control actions remain blocked in code; no model text can grant itself permission. Repo: Jester.",
       "dependencies": [
-        "jester.04"
+        "jester.04a"
       ],
       "owned_files": [
         "src/",
@@ -475,7 +501,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "id": "jester.15",
       "plan_id": "jester",
       "plan_version": 1,
-      "outcome": "Create sessions from speech.. Resolve a named project through the project catalog, create one thread with a correlation ID, and return its real name/tag; a retry must not create a duplicate. Repo: Jester.",
+      "outcome": "Create and start sessions from speech. Resolve a named project through the project catalog, create one EBI thread with a correlation ID, send Drew’s spoken assignment to that exact new thread, then confirm its real name/tag and whether work started. A retry must not create a duplicate thread or repeat the assignment. Repo: Jester.",
       "dependencies": [
         "jester.14"
       ],
@@ -713,7 +739,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "id": "jester.27",
       "plan_id": "jester",
       "plan_version": 1,
-      "outcome": "Finish an offline integration review of voice, transcript privacy, allwork parsing, exact EBI actions, permissions, events and restart behavior. Record measured live checks and the owner feel test as pending rather than claiming they passed.",
+      "outcome": "Finish an offline integration review of wake/re-arm, transcript-only mode, streaming voice, transcript privacy, allwork parsing, exact EBI actions, permissions, events and restart behavior. Record measured live checks and the owner feel test as pending rather than claiming they passed.",
       "dependencies": [
         "jester.26",
         "allwork.09"

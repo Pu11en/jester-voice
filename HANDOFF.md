@@ -12,6 +12,12 @@ Do not implement from old assumptions. Do not blindly port the existing EBI voic
 
 The old voice-transcripts bot will be removed entirely; Jester becomes the only voice bot. Jester therefore OWNS room transcripts (this replaces the "Existing room transcripts" section below) and must keep allwork working. Jester can reuse the existing DrewAI bot token for voice once the old service is stopped, so no separate Discord application is needed. Full inventory and cut-over order: `REPLACES_OLD_VOICE.md`.
 
+## Decision update — 2026-09-28: attention and transcript-only mode
+
+The owner clarified that Jester must stay conversationally dormant when it joins or after an exchange has ended. Speech in the room still goes into the agreed room transcript, but ordinary speech must not start a Luna turn or make Jester speak. Saying `Jester` starts a conversation; natural follow-ups from the engaged speaker do not need the name again. After a lull or a clear end to the exchange, Jester returns to requiring its name. Do not let ambient speech keep that engagement alive. Tune the end-of-exchange behavior against the owner feel test rather than treating a fixed timeout as the whole rule.
+
+The owner also wants an explicit **transcript-only mode**: `Jester, just listen` means transcribe everyone in the room without spoken replies, Luna conversation calls, or EBI/session actions. Entering it stops current and queued speech and pending actions. Only the owner can switch modes; an owner phrase such as `Jester, talk again` restores normal conversational mode in its dormant state. These mode commands must be recognized without Luna, including while transcript-only mode is active. Keep the recording notice and Pause control; paused recording still captures nothing. An owner `Jester, leave` command and the typed escape hatch remain available. Show the current mode in the transcript channel without a spoken acknowledgement. The mode lasts for the current owner voice-room presence and survives a transient service reconnect during that presence; a new owner presence starts in normal dormant mode.
+
 ## Mission
 
 Build a separate Discord voice bot/service called Jester that lets the owner operate and navigate the existing EBI/ccdb agent environment almost entirely by natural spoken conversation.
@@ -49,6 +55,7 @@ The old EBI voice implementation is evidence, not specification. Never inherit a
 - No wake word on every turn.
 - Saying `Jester` explicitly gets its attention.
 - Once engaged with a speaker, maintain contextual engagement naturally.
+- Ambient room speech is transcribed under the agreed room-transcript policy but does not start or extend conversational engagement or reach the brain as a request.
 - Tentative disengagement after roughly 30 seconds of inactivity is acceptable, but this is tunable and not a hard product truth.
 - When uncertain whether speech was directed at Jester, ask a very short clarification rather than confidently interrupting or acting.
 - Jester speaks aloud by default when it is addressed or continuing an active exchange.
