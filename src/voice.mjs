@@ -20,6 +20,11 @@ const OUTPUT_RATE = 16_000;
 const INPUT_CHANNELS = 2;
 const FRAME_SAMPLES = 512; // 32 ms at 16 kHz, as expected by the worker.
 
+/** Never forward raw Discord voice debug payloads; they can contain session keys. */
+export function voiceDebugWarning(message) {
+  return /Failed to decrypt a packet/i.test(message) ? "[voice] DAVE audio packet decrypt failed" : null;
+}
+
 /** Convert interleaved 48 kHz stereo s16le PCM to 16 kHz mono s16le PCM. */
 export function downmixResample48kTo16kMono(pcm) {
   if (pcm.length % (INPUT_CHANNELS * 2) !== 0) {
@@ -129,6 +134,7 @@ export function createVoice({
   let loggedIn = false;
   let connectionTimer = null;
   let intentionalDisconnect = false;
+  let lastDecryptWarningAt = 0;
 
   function capture(userId) {
     if (receivers.has(userId) || userId === client.user?.id) return;
@@ -205,9 +211,10 @@ export function createVoice({
         debug: true,
       });
       connection.on("debug", (message) => {
-        if (/decrypt|dave|transition|epoch|mls|session (re|in|down|up)/i.test(message)) {
-          logger.warn?.("[voice] debug:", message);
-        }
+        const warning = voiceDebugWarning(message);
+        if (!warning || Date.now() - lastDecryptWarningAt < 60_000) return;
+        lastDecryptWarningAt = Date.now();
+        logger.warn?.(warning);
       });
       connection.on("error", (error) => logger.warn?.("[voice] connection:", error.message));
       const watchedConnection = connection;

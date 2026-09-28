@@ -5,7 +5,14 @@ import {
   createPcmInput,
   createPlayedTimeTracker,
   downmixResample48kTo16kMono,
+  voiceDebugWarning,
 } from "./voice.mjs";
+
+test("voice debug output never exposes session tokens or keys", () => {
+  assert.equal(voiceDebugWarning('{"session_id":"secret","token":"secret","secret_key":[1,2]}'), null);
+  assert.equal(voiceDebugWarning("[DAVE] Failed to decrypt a packet (2 consecutive fails)"),
+    "[voice] DAVE audio packet decrypt failed");
+});
 
 function stereo(samples, left = (i) => samples[i], right = left) {
   const pcm = Buffer.alloc(samples.length * 4);
