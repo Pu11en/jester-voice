@@ -65,7 +65,7 @@ For the requested unattended build, implement this section after the automated v
 - **Quality gate:** Drew requested an unattended implementation across the repositories, so automated tasks can proceed before his 10–15 minute feel test. That test is still required before claiming the experience is accepted. The 2.8-second measured median means tuning may be needed before the gate passes.
 - **Direct tag decision:** Drew chose direct tag instructions only during an active Jester conversation. In dormancy, only `Jester` wakes it; no ambient tag speech dispatches EBI actions.
 - **Time:** 28 small outcomes imply roughly **12–21 hours of build and checking**, possibly split over more than one overnight run, plus Drew's remaining product decisions and the feel check. This is an estimate from task count and current code, not a promise that all 28 can finish in one night.
-- **Automation:** the scheduled overnight manifest has repo-scoped checks and dependency order. Do not let a Jester safe copy directly edit the live EBI or allwork checkout.
+- **Automation:** the overnight manifest has repo-scoped checks and dependency order. Its scheduled start and morning check are paused while Drew continues the experience review. Do not let a Jester safe copy directly edit the live EBI or allwork checkout.
 
 ## How to try it
 
