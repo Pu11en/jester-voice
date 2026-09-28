@@ -17,7 +17,7 @@ test("application starts the worker and presence, wires audio, then shuts down c
     createBrainImpl: () => brain,
     createTranscriptImpl: () => ({}),
     createPresenceImpl: () => presence,
-    createConversationImpl: () => conversation,
+    createConversationImpl: (options) => { assert.ok(options.stallClip.length > 0); return conversation; },
   });
   await app.start();
   assert.deepEqual(calls.slice(0, 3), [

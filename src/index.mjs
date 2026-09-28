@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
 import { Brain } from "./brain.mjs";
 import { loadConfig } from "./config.mjs";
 import { Conversation } from "./conversation.mjs";
@@ -18,6 +19,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   createConversationImpl = (options) => new Conversation(options),
 } = {}) {
   config ||= await loadConfig();
+  const stallClip = await readFile(resolve(projectRoot, "assets/thinking.pcm"));
   const worker = createWorkerImpl({
     command: config.python,
     args: [resolve(projectRoot, "worker/speech.py")],
@@ -30,7 +32,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const brain = createBrainImpl({});
   const transcript = createTranscriptImpl();
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
-  const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId, presence, transcript });
+  const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId, presence, transcript, stallClip });
 
   let started = false;
   let closing = null;

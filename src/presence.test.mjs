@@ -32,6 +32,15 @@ test("joins and prewarms when owner arrives, leaves when owner leaves", async ()
   presence.stop();
 });
 
+test("joins on startup when Discord has the owner's voice state but no cached member", async () => {
+  const { client, calls, presence } = setup();
+  client.guilds.cache.get("guild").members.cache.clear();
+  client.guilds.cache.get("guild").voiceStates = { cache: new Map([["owner", { channelId: "room" }]]) };
+  await presence.start();
+  assert.equal(calls.connect, 1);
+  presence.stop();
+});
+
 test("addressed leave stays dismissed for this presence; unrelated words do nothing", async () => {
   const { calls, presence } = setup({ channelId: "room" });
   await presence.start();

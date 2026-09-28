@@ -29,9 +29,7 @@ export class Presence {
     this.voice.on?.("disconnect", this.onVoiceDisconnect);
     try {
       await this.voice.login();
-      const guild = this.client.guilds.cache.get(this.config.guildId);
-      const owner = guild?.members.cache.get(this.config.ownerId);
-      await this.#setPresence(owner?.voice?.channelId === this.config.voiceChannelId);
+      await this.#setPresence(this.#ownerChannelId() === this.config.voiceChannelId);
     } catch (error) {
       this.stop();
       throw error;
@@ -110,17 +108,20 @@ export class Presence {
     else if (command === "!jester join" && this.inPresence) await this.join();
   }
 
+  #ownerChannelId() {
+    const guild = this.client.guilds.cache.get(this.config.guildId);
+    const voiceState = guild?.voiceStates?.cache?.get(this.config.ownerId);
+    if (voiceState) return voiceState.channelId;
+    return guild?.members?.cache?.get(this.config.ownerId)?.voice?.channelId ?? null;
+  }
+
   #recoverVoice() {
     if (!this.inPresence || this.dismissed || this.closed || this.recoveryAttempt >= 5) return;
-    const guild = this.client.guilds.cache.get(this.config.guildId);
-    const owner = guild?.members.cache.get(this.config.ownerId);
-    if (owner?.voice?.channelId !== this.config.voiceChannelId) return;
+    if (this.#ownerChannelId() !== this.config.voiceChannelId) return;
     const delay = Math.min(5_000, 250 * (2 ** this.recoveryAttempt++));
     this.recoveryTimer = setTimeout(async () => {
       if (!this.inPresence || this.dismissed) return;
-      const currentGuild = this.client.guilds.cache.get(this.config.guildId);
-      const currentOwner = currentGuild?.members.cache.get(this.config.ownerId);
-      if (currentOwner?.voice?.channelId !== this.config.voiceChannelId) return;
+      if (this.#ownerChannelId() !== this.config.voiceChannelId) return;
       await this.join();
       if (!this.joined) this.#recoverVoice();
       else this.recoveryAttempt = 0;

@@ -7,7 +7,8 @@ Wants=network-online.target
 Type=simple
 User=drewp
 WorkingDirectory=/home/drewp/main-projects/jester-voice
-Environment=PATH=/home/drewp/.local/node/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/drewp/.local/node/bin:/home/drewp/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CODEX_BIN=/home/drewp/.local/bin/codex
 ExecStart=/home/drewp/.local/node/bin/npm start
 Restart=always
 RestartSec=3
