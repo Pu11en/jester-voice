@@ -5,6 +5,7 @@ import { parseOwnerIntent } from "./owner-intent.mjs";
 test("finds read-only status requests without treating a passing name as an action", () => {
   assert.deepEqual(parseOwnerIntent("Jester, what is Frankie doing?"), { kind: "status-one", target: "Frankie" });
   assert.deepEqual(parseOwnerIntent("Who's running?"), { kind: "status-all" });
+  assert.deepEqual(parseOwnerIntent("Jester, update me on my sessions"), { kind: "status-all" });
   assert.equal(parseOwnerIntent("We talked about Frankie yesterday"), null);
   assert.deepEqual(parseOwnerIntent("Jester, stop Zoro"), { kind: "stop", target: "Zoro" });
   assert.deepEqual(parseOwnerIntent("Jester, close Zoro"), { kind: "close", target: "Zoro" });

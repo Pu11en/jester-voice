@@ -41,6 +41,12 @@ export class EventWatcher {
       await this.#save();
     }
     if (!Array.isArray(this.state.seen)) this.state.seen = [];
+    // A previous version queued unsolicited completion notices. Drop that
+    // backlog on upgrade; owner-requested result watches live separately.
+    if (this.state.notices.length) {
+      this.state.notices = [];
+      await this.#save();
+    }
     this.running = true;
     void this.tick();
   }
@@ -85,7 +91,7 @@ export class EventWatcher {
       this.state.pending = this.state.pending.filter(p => p.threadId !== turn.thread_id);
     }
     if (turn.state === "accepted") {
-      this.#notice(`${turn.turn_key}:accepted`, turn.thread_id, "finished");
+      this.#notice(`${turn.turn_key}:accepted`);
       await this.dependencies?.accepted(turn.thread_id, turn);
     }
     else if (turn.parked || turn.state === "expired") {
@@ -108,7 +114,7 @@ export class EventWatcher {
     const future = [];
     for (const item of this.state.pending) {
       if (item.due <= this.now()) {
-        this.#notice(item.id, item.threadId, "stopped or failed");
+        this.#notice(item.id);
         await this.dependencies?.failed(item.threadId,
           { updated_at: item.eventAt || "1970-01-01T00:00:00Z",
             terminal: item.terminal === true });
@@ -118,13 +124,10 @@ export class EventWatcher {
     this.state.pending = future;
   }
 
-  #notice(id, threadId, kind) {
+  #notice(id) {
     if (this.state.seen.includes(id)) return;
     this.state.seen.push(id);
     this.state.seen = this.state.seen.slice(-1_000);
-    this.state.notices.push({ id, threadId, kind, at: this.now() });
-    // Persist a bounded catch-up. The cursor prevents old turns from returning.
-    this.state.notices = this.state.notices.slice(-30);
   }
 
   async #flush() {
@@ -134,26 +137,6 @@ export class EventWatcher {
     const watch = this.dependencies?.readyResultWatches?.()[0];
     if (watch) {
       if (this.now() - watch.readyAt >= 2_000) await this.#flushResults(watch);
-      return;
-    }
-    if (!this.state.notices.length) return;
-    const ready = this.state.notices.filter(n => n.kind !== "finished" ||
-      this.now() - n.at >= 2_000).slice(0, 6);
-    if (!ready.length) return;
-    const sessions = await this.client.snapshot();
-    const label = id => {
-      const session = sessions.find(s => s.threadId === id);
-      return session?.tag || session?.name || "A session";
-    };
-    const failures = ready.filter(n => n.kind !== "finished");
-    const finishes = ready.filter(n => n.kind === "finished");
-    const parts = [];
-    if (failures.length) parts.push(`${failures.slice(0, 3).map(n => label(n.threadId)).join(", ")} stopped or may need attention.`);
-    if (finishes.length) parts.push(`${finishes.slice(0, 3).map(n => label(n.threadId)).join(", ")} finished a turn.`);
-    const spoken = parts.join(" ");
-    if (this.conversation.announce(spoken)) {
-      const delivered = new Set(ready.map(n => n.id));
-      this.state.notices = this.state.notices.filter(n => !delivered.has(n.id));
     }
   }
 
@@ -189,10 +172,7 @@ export class EventWatcher {
     }
     if (this.conversation.announce(watch.reportSpoken || report?.spoken ||
         "I posted the watched session results in Auto Transcripts.")) {
-      if (await this.dependencies.markResultsDelivered(watch.id)) {
-        const ids = new Set(watch.sources.map(s => s.threadId));
-        this.state.notices = this.state.notices.filter(n => !ids.has(n.threadId));
-      }
+      await this.dependencies.markResultsDelivered(watch.id);
     }
   }
 

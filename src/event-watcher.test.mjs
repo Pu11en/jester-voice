@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -10,7 +10,7 @@ const threadId = "1554145503506333736";
 const tickWait = () => new Promise(resolve => setTimeout(resolve, 20));
 const empty = () => ({ turns: [], next: null, has_more: false });
 
-test("completed turns wait for owner and quiet gap, survive restart, then speak once", async () => {
+test("completed turns stay quiet by default, including an old queued notice after restart", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jester-events-"));
   const file = join(dir, "events.json");
   let now = 0;
@@ -31,8 +31,11 @@ test("completed turns wait for owner and quiet gap, survive restart, then speak 
     next: { since: "2026-09-28T12:00:01+00:00", after: "turn-1" }, has_more: false });
     await watcher.tick();
     assert.equal(spoken.length, 0);
-    assert.equal(JSON.parse(await readFile(file, "utf8")).notices.length, 1);
+    assert.equal(JSON.parse(await readFile(file, "utf8")).notices.length, 0);
     await watcher.close();
+    const oldState = JSON.parse(await readFile(file, "utf8"));
+    oldState.notices = [{ id: "old:accepted", threadId, kind: "finished", at: 0 }];
+    await writeFile(file, JSON.stringify(oldState));
 
     const resumed = new EventWatcher({ client, conversation, presence, file, now: () => now,
       intervalMs: 60_000 });
@@ -41,7 +44,7 @@ test("completed turns wait for owner and quiet gap, survive restart, then speak 
     now = 3_000;
     await resumed.start();
     await tickWait();
-    assert.deepEqual(spoken, ["franky finished a turn."]);
+    assert.deepEqual(spoken, []);
     await resumed.close();
     assert.equal(JSON.parse(await readFile(file, "utf8")).notices.length, 0);
   } finally {
@@ -110,7 +113,7 @@ test("an expired turn reports a possible failure and blocks follow-on work", asy
     now = 6_000;
     await watcher.tick();
     assert.deepEqual(failed, [[threadId, "2026-09-28T12:00:02+00:00", true]]);
-    assert.deepEqual(spoken, ["franky stopped or may need attention."]);
+    assert.deepEqual(spoken, []);
   } finally {
     await watcher.close();
     await rm(dir, { recursive: true, force: true });

@@ -29,6 +29,8 @@ function setup({ answers = ["A reply."], brainAsk = null, presence = null, trans
     player,
     played: [],
     stopped: 0,
+    muted: [],
+    setSelfMuted(muted) { this.muted.push(muted); },
     play(id, stream) { this.played.push({ id, stream }); },
     stopNow() { this.stopped += 1; },
     playedMs() { return 600; },
@@ -769,6 +771,7 @@ test("just listen cancels current and queued speech while keeping every room tur
     events("turn_end", { text: "Jester, just listen" });
     await flush();
     assert.equal(conversation.mode, "transcript");
+    assert.equal(voice.muted.at(-1), true);
     assert.equal(conversation.attention.engaged, false);
     assert.equal(conversation.reply, null);
     assert.ok(worker.sent.some(({ op, id }) => op === "cancel" && id === first.id));
@@ -810,6 +813,7 @@ test("talk again restores dormant conversation and owner presence resets transcr
     events("turn_end", { text: "Jester, talk again" });
     await flush();
     assert.equal(conversation.mode, "conversation");
+    assert.equal(voice.muted.at(-1), false);
     assert.equal(conversation.attention.engaged, false);
     events("turn_end", { text: "What did I miss?" });
     await flush();

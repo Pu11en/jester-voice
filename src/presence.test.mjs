@@ -11,11 +11,12 @@ function setup({ channelId = null, transcript = null, privacyFile = join(tmpdir(
   const client = new EventEmitter();
   const member = { voice: { channelId } };
   client.guilds = { cache: new Map([["guild", { members: { cache: new Map([["owner", member]]) } }]]) };
-  const calls = { login: 0, connect: 0, disconnect: 0, prewarm: 0, paused: [] };
+  const calls = { login: 0, connect: 0, disconnect: 0, prewarm: 0, paused: [], sequence: [] };
   const voice = {
     async login() { calls.login++; },
     async connect() { calls.connect++; },
-    disconnect() { calls.disconnect++; },
+    disconnect() { calls.disconnect++; calls.sequence.push("disconnect"); },
+    setSelfMuted(muted) { calls.sequence.push(`mute:${muted}`); },
     setCapturePaused(paused) { calls.paused.push(paused); },
   };
   const brain = { async prewarm() { calls.prewarm++; } };
@@ -94,6 +95,7 @@ test("addressed leave stays dismissed for this presence; unrelated words do noth
   assert.equal(await presence.handleOwnerTurn("leave"), false);
   assert.equal(await presence.handleOwnerTurn("Jester, disconnect!"), true);
   assert.equal(calls.connect, 1);
+  assert.deepEqual(calls.sequence.slice(-2), ["mute:true", "disconnect"]);
   await presence.client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: "room" });
   assert.equal(calls.connect, 1);
   presence.client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: null });

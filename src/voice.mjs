@@ -144,6 +144,7 @@ export function createVoice({
   let connectionTimer = null;
   let intentionalDisconnect = false;
   let capturePaused = false;
+  let selfMuted = false;
   let lastDecryptWarningAt = 0;
 
   function capture(userId) {
@@ -198,6 +199,16 @@ export function createVoice({
   return {
     client,
     player,
+    setSelfMuted(muted) {
+      selfMuted = Boolean(muted);
+      if (selfMuted) player.stop(true);
+      if (!connection || connection.state.status === voice.VoiceConnectionStatus.Destroyed) return true;
+      try { return connection.rejoin({ selfMute: selfMuted }); }
+      catch (error) {
+        logger.warn?.("[voice] self mute:", error.message);
+        return false;
+      }
+    },
     setCapturePaused(paused) {
       capturePaused = Boolean(paused);
       if (capturePaused) for (const { finish } of [...receivers.values()]) finish();
@@ -228,7 +239,7 @@ export function createVoice({
         guildId: config.guildId,
         adapterCreator: guild.voiceAdapterCreator,
         selfDeaf: false,
-        selfMute: false,
+        selfMute: selfMuted,
         debug: true,
       });
       connection.on("debug", (message) => {
@@ -262,6 +273,7 @@ export function createVoice({
       return connection;
     },
     play(id, pcmStream) {
+      if (selfMuted) return;
       const stream = Buffer.isBuffer(pcmStream) ? Readable.from([pcmStream]) : pcmStream;
       if (!stream || typeof stream.pipe !== "function") throw new Error("play expects a PCM Readable stream or Buffer");
       const resource = voice.createAudioResource(stream, { inputType: voice.StreamType.Raw });

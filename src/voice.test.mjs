@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import { AudioPlayerStatus } from "@discordjs/voice";
 import {
   createPcmInput,
   createPlayedTimeTracker,
+  createVoice,
   downmixResample48kTo16kMono,
   voiceDebugWarning,
 } from "./voice.mjs";
@@ -12,6 +14,35 @@ test("voice debug output never exposes session tokens or keys", () => {
   assert.equal(voiceDebugWarning('{"session_id":"secret","token":"secret","secret_key":[1,2]}'), null);
   assert.equal(voiceDebugWarning("[DAVE] Failed to decrypt a packet (2 consecutive fails)"),
     "[voice] DAVE audio packet decrypt failed");
+});
+
+test("self mute is sent to Discord on join and while connected", async () => {
+  const client = new EventEmitter();
+  client.guilds = { cache: new Map([["guild", { voiceAdapterCreator() {} }]]) };
+  client.login = async () => { queueMicrotask(() => client.emit("ready")); };
+  const player = Object.assign(new EventEmitter(), { stop() {}, play() {} });
+  const connection = Object.assign(new EventEmitter(), {
+    state: { status: "ready" }, receiver: { speaking: new EventEmitter() },
+    subscribe() {}, destroy() { this.state.status = "destroyed"; },
+    rejoin(config) { this.lastRejoin = config; return true; },
+  });
+  let joinConfig;
+  const transport = createVoice({
+    config: { guildId: "guild", voiceChannelId: "room", token: "unused" }, client,
+    voice: { AudioPlayerStatus, createAudioPlayer: () => player,
+      NoSubscriberBehavior: { Pause: "pause" }, VoiceConnectionStatus: { Ready: "ready",
+        Destroyed: "destroyed", Disconnected: "disconnected" },
+      joinVoiceChannel: config => { joinConfig = config; return connection; },
+      entersState: async () => {},
+      EndBehaviorType: { AfterSilence: "silence" }, StreamType: { Raw: "raw" },
+    },
+  });
+  transport.setSelfMuted(true);
+  await transport.connect();
+  assert.equal(joinConfig.selfMute, true);
+  transport.setSelfMuted(false);
+  assert.deepEqual(connection.lastRejoin, { selfMute: false });
+  transport.disconnect();
 });
 
 function stereo(samples, left = (i) => samples[i], right = left) {

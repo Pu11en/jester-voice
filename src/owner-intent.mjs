@@ -25,6 +25,9 @@ function resultTargets(raw) {
 export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   const text = String(raw || "").trim().replace(WAKE, "").trim();
   if (/^who(?:'s| is)\s+(?:running|working|active)[?.!]*$/i.test(text)) return { kind: "status-all" };
+  if (/^(?:update me on (?:my )?sessions|give me a (?:session|sessions) update|what(?:'s| is) happening with (?:my )?sessions)[?.!]*$/i.test(text)) {
+    return { kind: "status-all" };
+  }
   const status = statusOne.exec(text);
   if (status) return { kind: "status-one", target: status[1] };
   const stop = STOP.exec(text);

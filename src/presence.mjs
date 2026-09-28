@@ -104,6 +104,7 @@ export class Presence extends EventEmitter {
     this.emit("reset", "owner_leave");
     clearTimeout(this.recoveryTimer);
     if (this.joining) await this.joining;
+    this.voice.setSelfMuted?.(true);
     this.voice.disconnect();
     this.joined = false;
     await this.transcript?.finish();

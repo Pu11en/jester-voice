@@ -13,13 +13,14 @@ These are Drew's first checks after the local build is integrated and the live s
 
 - Say exactly `Jester just listen` without a comma. The comma variant also works.
 - Jester stops speaking and pending actions, keeps transcribing everyone, and makes no Luna or EBI calls.
+- Check that Discord shows Jester as muted while it keeps transcribing. `Jester talk again` should clear the mute icon. `Jester leave` disconnects it from the room.
 - Say `Jester talk again`; Jester returns to dormant mode and waits for its name before replying.
 
 ## C — Find and control the right EBI session
 
 The fake EBI session and receipt checks pass, and the owner controls are loaded in the local services. In Discord, use a clearly identified harmless test session and one benign prompt chosen by Drew; do not send a test assignment to an unrelated live work thread. Check the room transcript against the exact prompt posted in the destination thread.
 
-1. **Find:** Ask `What is Frankie doing?` Jester recognizes `Frankie` as the current `franky` tag, reads real EBI status, and names the exact session. `Who's running?` lists current work. Unknown or reused names lead to one short clarification and no action.
+1. **Find:** Ask `What is Frankie doing?` Jester recognizes `Frankie` as the current `franky` tag, reads real EBI status, and names the exact session. `Who's running?` or `Jester, update me on my sessions` gives a one-time status. Routine session changes stay silent. Unknown or reused names lead to one short clarification and no action.
 2. **Send:** During an active Jester conversation, say `And Frankie, we need to [benign test task]` or directly address `Frankie, ...`; Jester waits for the complete thought, strips only filler and superseded corrections, and posts one faithful prompt to Frankie's current exact thread ID. A passing mention of Frankie or a dormant `Frankie, ...` sends nothing. Repeat the direct-address fake check for every current tag/alias so the attention gate cannot special-case only Zoro.
 3. **Correct:** Say `Frankie—actually Zoro—[benign test task]`, or change `deploy` to `just test` before the turn ends. The final target and final instruction win; the superseded destination receives nothing. If the target changes while waiting, recheck it before sending.
 4. **Follow up:** `Tell him to add tests` refers to the last exact bound thread ID during the active 60-second exchange, even if a reusable tag later points elsewhere. An unclear `him` leads to clarification, never a guessed send.

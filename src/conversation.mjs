@@ -76,6 +76,7 @@ export class Conversation {
     };
     this.onPresenceReset = (reason) => {
       if (reason === "owner_departed" || reason === "owner_leave") this.mode = "conversation";
+      if (!reason) this.voice.setSelfMuted?.(this.mode === "transcript");
       this.#voiceDisconnected();
     };
     this.onBrainFatal = (error) => {
@@ -212,6 +213,7 @@ export class Conversation {
     const requestedMode = modeCommand(event.text);
     if (requestedMode) {
       this.mode = requestedMode;
+      this.voice.setSelfMuted?.(requestedMode === "transcript");
       if (requestedMode === "transcript") await this.ownerRouter?.dependencies?.cancelPending?.();
       this.transcript?.setMode?.(requestedMode);
       this.attention.reset();
