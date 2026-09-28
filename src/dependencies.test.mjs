@@ -8,6 +8,7 @@ import { Dependencies } from "./dependencies.mjs";
 const sourceId = "1553779983158349925";
 const destinationId = "1554145503506333736";
 const ownerId = "488763953397235712";
+const freshTurn = () => ({ accepted_at: new Date(Date.now() + 1000).toISOString() });
 
 test("one accepted source turn sends one exact follow-on task, even after restart", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
@@ -19,7 +20,7 @@ test("one accepted source turn sends one exact follow-on task, even after restar
     const deps = new Dependencies({ client, ownerId, file });
     await deps.start();
     await deps.add({ sourceId, destinationId, task: "run the checks" });
-    await deps.accepted(sourceId);
+    await deps.accepted(sourceId, freshTurn());
     assert.equal(calls.length, 1);
     assert.equal(calls[0].threadId, destinationId);
     assert.equal(calls[0].speakerId, ownerId);
@@ -27,7 +28,7 @@ test("one accepted source turn sends one exact follow-on task, even after restar
     await deps.close();
     const resumed = new Dependencies({ client, ownerId, file });
     await resumed.start();
-    await resumed.accepted(sourceId);
+    await resumed.accepted(sourceId, freshTurn());
     assert.equal(calls.length, 1);
     await resumed.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
@@ -48,16 +49,37 @@ test("uncertain delivery retries the same request ID; failed source blocks dispa
       now: () => now, logger: { warn() {} } });
     await deps.start();
     await deps.add({ sourceId, destinationId, task: "test login" });
-    await deps.accepted(sourceId);
+    await deps.accepted(sourceId, { accepted_at: "1970-01-01T00:00:01Z" });
     assert.equal(calls.length, 1);
     now = 11_000;
     await deps.reconcile();
     assert.equal(calls.length, 2);
     assert.equal(calls[0].requestId, calls[1].requestId);
     await deps.add({ sourceId, destinationId, task: "do not run" });
-    await deps.failed(sourceId);
-    await deps.accepted(sourceId);
+    await deps.failed(sourceId, { updated_at: "1970-01-01T00:00:12Z" });
+    await deps.accepted(sourceId, { accepted_at: "1970-01-01T00:00:12Z" });
     assert.equal(calls.length, 2);
+    await deps.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("an old completion cannot trigger a newly requested follow-on task", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const calls = [];
+  const now = Date.parse("2026-09-28T12:00:00Z");
+  const client = { snapshot: async () => [{ threadId: destinationId, closed: false }],
+    sendSpoken: async payload => { calls.push(payload); return { status: "posted" }; } };
+  try {
+    const deps = new Dependencies({ client, ownerId, file: join(dir, "dependencies.json"),
+      now: () => now });
+    await deps.start();
+    await deps.add({ sourceId, destinationId, task: "check this turn" });
+    await deps.accepted(sourceId, { accepted_at: "2026-09-28T11:59:59Z" });
+    await deps.failed(sourceId, { updated_at: "2026-09-28T11:59:59Z" });
+    assert.equal(calls.length, 0);
+    assert.equal(deps.items[0].status, "pending");
+    await deps.accepted(sourceId, { accepted_at: "2026-09-28T12:00:01Z" });
+    assert.equal(calls.length, 1);
     await deps.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -74,20 +96,20 @@ test("group handoff waits for every source, dispatches once, and blocks on a fai
     await deps.start();
     const sources = [{ threadId: sourceId, label: "zoro" }, { threadId: secondId, label: "sanji" }];
     await deps.addGroup({ sources, destinationId, task: "check links" });
-    await deps.accepted(sourceId);
+    await deps.accepted(sourceId, freshTurn());
     assert.equal(calls.length, 0);
-    await deps.accepted(secondId);
+    await deps.accepted(secondId, freshTurn());
     assert.equal(calls.length, 1);
     assert.equal(calls[0].threadId, destinationId);
     await deps.close();
     const resumed = new Dependencies({ client, ownerId, file });
     await resumed.start();
-    await resumed.accepted(sourceId);
-    await resumed.accepted(secondId);
+    await resumed.accepted(sourceId, freshTurn());
+    await resumed.accepted(secondId, freshTurn());
     assert.equal(calls.length, 1);
     await resumed.addGroup({ sources, destinationId, task: "do not run" });
-    await resumed.failed(sourceId, { terminal: true });
-    await resumed.accepted(secondId);
+    await resumed.failed(sourceId, { terminal: true, updated_at: new Date(Date.now() + 1000).toISOString() });
+    await resumed.accepted(secondId, freshTurn());
     assert.equal(calls.length, 1);
     await resumed.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
@@ -103,7 +125,7 @@ test("just-listen cancellation prevents a queued follow-on task", async () => {
     await deps.start();
     await deps.add({ sourceId, destinationId, task: "run the checks" });
     await deps.cancelPending();
-    await deps.accepted(sourceId);
+    await deps.accepted(sourceId, freshTurn());
     assert.equal(calls.length, 0);
     await deps.close();
   } finally { await rm(dir, { recursive: true, force: true }); }

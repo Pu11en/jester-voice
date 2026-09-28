@@ -85,6 +85,22 @@ test("a lost spawn response resolves its correlation without creating another th
   assert.equal(JSON.parse(calls[0].body).model, undefined);
 });
 
+test("explicit empty spawn sends no prompt and does not start a worker", async () => {
+  let payload;
+  const client = new EbiClient({ fetchImpl: async (_url, options) => {
+    payload = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ thread_id: "1554146845415055445",
+      status: "spawned", voice_label: "jinbe" }) };
+  } });
+  const result = await client.spawnSession({ projectPath: "/projects/jobs", empty: true,
+    threadName: "Jobs", ownerId: "488763953397235712" });
+  assert.equal(result.thread_id, "1554146845415055445");
+  assert.equal(payload.prompt, undefined);
+  assert.equal(payload.auto_start, false);
+  assert.equal(payload.empty, true);
+  assert.equal(payload.thread_name, "Jobs");
+});
+
 test("history accepts only exact string IDs, never rounded JSON numbers", async () => {
   const client = new EbiClient({ fetchImpl: async () => ({ ok: true,
     json: async () => ({ results: [{ thread_id: 1554145503506333736, thread_id_str: "1554145503506333736",

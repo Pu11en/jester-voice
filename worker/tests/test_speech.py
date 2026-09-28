@@ -86,6 +86,28 @@ def test_complete_kokoro_utterance_is_transcribed_and_ends(speech_stack):
     assert "commit" in ends[0]["text"].lower()
 
 
+def test_trimmed_utterance_is_marked_incomplete(monkeypatch):
+    import worker.speech as speech
+
+    monkeypatch.setattr(speech, "MAX_UTTERANCE_FRAMES", 3)
+    events = []
+
+    class Voice:
+        def score(self, _speaker, _frame):
+            return 0.9
+
+        def reset(self, _speaker):
+            pass
+
+    pipeline = SpeechPipeline(Voice(), None, None, events.append)
+    pipeline.feed("owner", np.ones(5 * FRAME_SAMPLES, dtype="<i2").tobytes())
+    state = pipeline.speakers["owner"]
+    assert state.clipped is True
+    pipeline._finish("owner", state, 0.0)
+    assert events[-1]["incomplete"] is True
+    assert state.clipped is False
+
+
 def test_one_second_pause_after_connector_does_not_end_turn(speech_stack):
     pipeline, events = speech_stack
     pipeline.reset("kokoro")

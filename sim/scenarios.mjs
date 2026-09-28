@@ -2,6 +2,18 @@
 // evaluated after a complete turn against the real Conversation and OwnerRouter.
 export const scenarios = [
   {
+    id: "natural-assignment",
+    title: "Natural request proposes one exact Zoro task; a hold sends nothing",
+    steps: [
+      { speaker: "owner", text: "Jester, could you put this in Zoro's thread: review login and don't edit files",
+        expect: { writes: 1, writeKind: "spoken", writeTarget: "zoro",
+          writeThreadId: "1553779983158349925", writeText: ["review login", "don't edit files"],
+          says: ["posted", "zoro"], brain: 0 } },
+      { speaker: "owner", text: "Jester, tell Zoro to deploy, but don't send it yet",
+        expect: { writes: 0, says: ["won't send"], brain: 0 } },
+    ],
+  },
+  {
     id: "ambient-zoro",
     title: "Dormant room talk, guest, then Zoro status",
     steps: [

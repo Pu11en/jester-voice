@@ -37,7 +37,8 @@ export class Dependencies {
       throw new Error("Invalid follow-on task");
     }
     const item = { id: randomUUID(), sourceId, destinationId, task: task.trim(),
-      requestId: randomUUID(), status: "pending", nextRetryAt: 0 };
+      requestId: randomUUID(), status: "pending",
+      createdAt: new Date(this.now()).toISOString(), nextRetryAt: 0 };
     this.items.push(item);
     await this.#save();
     return item;
@@ -100,6 +101,8 @@ export class Dependencies {
     for (const item of readyGroups) await this.#dispatch(item);
     for (const item of this.items) {
       if (item.status !== "pending" || item.sourceId !== threadId) continue;
+      const eventAt = turn?.accepted_at || turn?.updated_at;
+      if (!item.createdAt || !eventAt || Date.parse(eventAt) <= Date.parse(item.createdAt)) continue;
       // Persist dispatching before an external POST. Repeats use this one ID.
       item.status = "dispatching";
       await this.#save();
@@ -128,6 +131,8 @@ export class Dependencies {
         changed = true;
       }
       if (item.status === "pending" && item.sourceId === threadId) {
+        const eventAt = turn?.updated_at;
+        if (!item.createdAt || !eventAt || Date.parse(eventAt) <= Date.parse(item.createdAt)) continue;
         item.status = "blocked";
         changed = true;
       }

@@ -33,6 +33,7 @@ export class Brain extends EventEmitter {
     args = LEAN_ARGS,
     model = "gpt-6-luna",
     effort = "low",
+    baseInstructions = JESTER_INSTRUCTIONS,
     cwd = "/tmp",
     requestTimeoutMs = 60_000,
     turnTimeoutMs = 60_000,
@@ -46,6 +47,7 @@ export class Brain extends EventEmitter {
     this.args = [...args];
     this.model = model;
     this.effort = effort;
+    this.baseInstructions = baseInstructions;
     this.cwd = cwd;
     this.requestTimeoutMs = requestTimeoutMs;
     this.turnTimeoutMs = turnTimeoutMs;
@@ -120,7 +122,7 @@ export class Brain extends EventEmitter {
     this.#notify("initialized");
     const started = await this.#request("thread/start", {
       model: this.model,
-      baseInstructions: JESTER_INSTRUCTIONS,
+      baseInstructions: this.baseInstructions,
       ephemeral: true,
       sandbox: "read-only",
       approvalPolicy: "never",
@@ -133,7 +135,7 @@ export class Brain extends EventEmitter {
   }
 
   /** Ask Jester and yield completed sentence strings as deltas arrive. */
-  async *ask(text, { speaker, requestId, context = null } = {}) {
+  async *ask(text, { speaker, requestId, context = null, whole = false } = {}) {
     if (typeof text !== "string" || !text.trim()) throw new TypeError("text must be non-empty");
     const threadId = await this.prewarm();
     if (this.activeTurn) throw new Error("A brain turn is already running");
@@ -193,11 +195,13 @@ export class Brain extends EventEmitter {
               this.emit("firstWord", { threadId, speaker, requestId, at: Date.now() });
             }
             remainder += delta;
-            let match;
-            while ((match = sentenceEnd.exec(remainder))) {
-              const sentence = remainder.slice(0, match.index + match[0].trimEnd().length).trim();
-              remainder = remainder.slice(match.index + match[0].length);
-              if (sentence) yield sentence;
+            if (!whole) {
+              let match;
+              while ((match = sentenceEnd.exec(remainder))) {
+                const sentence = remainder.slice(0, match.index + match[0].trimEnd().length).trim();
+                remainder = remainder.slice(match.index + match[0].length);
+                if (sentence) yield sentence;
+              }
             }
           } else if (message.method === "turn/completed") {
             clearTimeout(turnTimer);

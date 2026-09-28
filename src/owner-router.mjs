@@ -24,12 +24,15 @@ function runtimeChoice(intent) {
 /** Deterministic owner actions; model output never enters this action path. */
 export class OwnerRouter {
   constructor({ client, ownerId, now = () => Date.now(), postLink = null,
-    dependencies = null, sessionReader = new SessionReader({ client }) }) {
+    dependencies = null, actionJournal = null,
+    sessionReader = new SessionReader({ client }) }) {
     this.client = client;
     this.ownerId = String(ownerId);
     this.now = now;
     this.postLink = postLink;
     this.dependencies = dependencies;
+    this.actionJournal = actionJournal;
+    this.trace = null;
     this.sessionReader = sessionReader;
     this.bound = null;
     this.readBoundUntil = null;
@@ -79,7 +82,9 @@ export class OwnerRouter {
     if (String(speakerId) !== this.ownerId) return null;
     const intent = suppliedIntent || parseOwnerIntent(text);
     if (!intent) return null;
-    if (intent.kind === "clarify") return "Please say the final task once more so I send the right words.";
+    if (intent.kind === "clarify") return intent.reason === "hold" ?
+      "Okay, I won't send anything. Say the task again when you're ready." :
+      "Please say the final task once more so I send the right words.";
     if (intent.kind === "status-all") {
       const sessions = (await this.client.snapshot()).filter(s => !s.closed &&
         ["running", "queued"].includes(s.state));
@@ -176,7 +181,7 @@ export class OwnerRouter {
     }
     if (intent.kind === "dependency") {
       if (!this.dependencies) return "Follow-on tasks are unavailable right now.";
-      if (/\b(?:actually|wait|rather|instead)\b/i.test(intent.instruction)) {
+      if (intent.instruction && /\b(?:actually|wait|rather|instead)\b/i.test(intent.instruction)) {
         return "Please say the final follow-on task once more.";
       }
       const source = await this.client.resolveTag(intent.source);
@@ -210,18 +215,45 @@ export class OwnerRouter {
       const choice = intent.runtime ? runtimeChoice(intent) : { backend: "codex", model: null };
       if (!choice) return "I couldn't match that model and agent combination. Please name one supported choice.";
       if (!shouldAct()) return null;
+      const action = this.actionJournal ? await this.actionJournal.prepare("spawn", project.path,
+        { instruction: intent.instruction || null, empty: intent.empty === true,
+          backend: choice.backend, model: choice.model }) : null;
+      this.trace?.({ kind: "spawn", stage: "prepared", target: project.path,
+        actionId: action?.item.id || null, repeated: action ? !action.fresh : false });
+      if (!shouldAct()) {
+        if (action?.fresh) await this.actionJournal.finish(action.item, "canceled");
+        return null;
+      }
       let created;
       try {
-        created = await this.client.spawnSession({ projectPath: project.path,
-          instruction: intent.instruction, ownerId: this.ownerId, ...choice });
+        if (action && !action.fresh) {
+          created = action.item.status === "created" ? action.item.result :
+            await this.client.spawnCorrelation(action.item.id);
+        } else {
+          created = await this.client.spawnSession({ projectPath: project.path,
+            instruction: intent.instruction,
+            ...(intent.empty === true ? { empty: true, threadName: project.name } : {}),
+            ownerId: this.ownerId, ...choice,
+            ...(action ? { correlationId: action.item.id } : {}) });
+        }
       } catch {
+        this.trace?.({ kind: "spawn", stage: "uncertain", target: project.path,
+          actionId: action?.item.id || null });
         return "I couldn't verify whether the session was created. I won't create it twice.";
       }
+      if (action) await this.actionJournal.finish(action.item, "created", created);
+      this.trace?.({ kind: "spawn", stage: "created", target: created.thread_id,
+        actionId: action?.item.id || null, status: created.status });
       this.bound = { threadId: created.thread_id, until: this.now() + BIND_MS };
+      const tag = created.voice_label ? `Its tag is ${created.voice_label}.` :
+        "I couldn't verify a voice tag for it yet; find the thread in Discord.";
+      if (intent.empty === true) {
+        return `I created an empty ${choice.backend} session for ${project.name}. ${tag} No task is queued.`;
+      }
       const state = ["queued", "running"].includes(created.status) ?
         ` EBI reports the first task is ${created.status}.` :
         " I can't verify that its first task started yet.";
-      return `I created a ${choice.backend} session for ${project.name}. Its tag is ${created.voice_label || "still being assigned"}.${state}`;
+      return `I created a ${choice.backend} session for ${project.name}. ${tag}${state}`;
     }
     const resolved = await this.#target(intent.target, allowReference);
     if (resolved.kind === "ambiguous") return `More than one session matches ${intent.target}. Please name the exact one.`;
@@ -282,18 +314,49 @@ export class OwnerRouter {
     }
     if (!shouldAct()) return null;
     this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
+    const action = this.actionJournal ? await this.actionJournal.prepare("spoken", session.threadId,
+      intent.instruction) : null;
+    this.trace?.({ kind: "spoken", stage: "prepared", target: session.threadId,
+      actionId: action?.item.id || null, repeated: action ? !action.fresh : false });
+    if (!shouldAct()) {
+      if (action?.fresh) await this.actionJournal.finish(action.item, "canceled");
+      return null;
+    }
     let receipt;
     try {
-      receipt = await this.client.sendSpoken({
-        threadId: session.threadId, speakerId: this.ownerId, text: intent.instruction,
-      });
+      if (action && !action.fresh && ["posted", "failed"].includes(action.item.status)) {
+        receipt = action.item.result;
+      } else if (action && !action.fresh) {
+        try {
+          receipt = await this.client.spokenReceipt(session.threadId, action.item.id);
+        } catch (error) {
+          if (error.status !== 404) throw error;
+          // EBI reserves the request ID atomically before delivery. A missing
+          // receipt can be retried under that same ID without a second post.
+          if (!shouldAct()) return null;
+          receipt = await this.client.sendSpoken({ threadId: session.threadId,
+            speakerId: this.ownerId, text: intent.instruction, requestId: action.item.id });
+        }
+      } else {
+        receipt = await this.client.sendSpoken({
+          threadId: session.threadId, speakerId: this.ownerId, text: intent.instruction,
+          ...(action ? { requestId: action.item.id } : {}),
+        });
+      }
       for (let tries = 0; tries < 15 && receipt.status === "accepted"; tries += 1) {
         await wait(100);
-        receipt = await this.client.spokenReceipt(session.threadId, receipt.request_id);
+        receipt = await this.client.spokenReceipt(session.threadId, action?.item.id || receipt.request_id);
       }
     } catch {
+      this.trace?.({ kind: "spoken", stage: "uncertain", target: session.threadId,
+        actionId: action?.item.id || null });
       return `I couldn't verify that ${name} received it. I won't send it twice.`;
     }
+    if (action && ["posted", "failed"].includes(receipt.status)) {
+      await this.actionJournal.finish(action.item, receipt.status, receipt);
+    }
+    this.trace?.({ kind: "spoken", stage: receipt.status, target: session.threadId,
+      actionId: action?.item.id || receipt.request_id || null });
     if (receipt.status === "posted") return `I posted your task to ${name}.`;
     if (receipt.status === "failed") return `Posting to ${name} failed. Please check the thread before trying again.`;
     return `${name} accepted the task, but I couldn't verify the post yet.`;

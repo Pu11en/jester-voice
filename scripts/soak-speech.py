@@ -86,8 +86,10 @@ def main():
             if "error" in line.lower() or "exception" in line.lower():
                 report["errors"].append(line.strip()[:500])
 
-    threading.Thread(target=read_events, daemon=True).start()
-    threading.Thread(target=read_errors, daemon=True).start()
+    events_thread = threading.Thread(target=read_events, daemon=True)
+    errors_thread = threading.Thread(target=read_errors, daemon=True)
+    events_thread.start()
+    errors_thread.start()
     if not ready.wait(90):
         report["errors"].append("worker did not become ready")
     start = time.monotonic()
@@ -136,6 +138,8 @@ def main():
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+        events_thread.join(timeout=2)
+        errors_thread.join(timeout=2)
         report["worker_exit"] = process.returncode
         report["cycles"] = cycle
         report["gpu_peak_mib"] = max(report["gpu_peak_mib"], gpu_used() or 0)
@@ -143,7 +147,10 @@ def main():
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2), flush=True)
-    if report["errors"] or report["turns"] == 0 or report["worker_exit"] != 0:
+    if (report["errors"] or report["elapsed_seconds"] < args.minutes * 60 - 1 or
+            report["turns"] < max(1, report["cycles"] - 1) or report["empty_turns"] or
+            report["tts_done"] != report["tts_sent"] or
+            (report["tts_sent"] and not report["tts_chunks"]) or report["worker_exit"] != 0):
         raise SystemExit(1)
 
 

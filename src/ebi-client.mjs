@@ -114,13 +114,17 @@ export class EbiClient {
     });
   }
 
-  async spawnSession({ projectPath, instruction, ownerId, backend = "codex", model = null,
+  async spawnSession({ projectPath, instruction = null, empty = false, threadName = null,
+    ownerId, backend = "codex", model = null,
     correlationId = randomUUID() }) {
-    if (!projectPath?.startsWith("/") || !instruction?.trim() || !THREAD_ID.test(String(ownerId))) {
+    if (!projectPath?.startsWith("/") || !THREAD_ID.test(String(ownerId)) ||
+        (empty ? (instruction?.trim() || !threadName?.trim()) : !instruction?.trim())) {
       throw new Error("Invalid session request");
     }
-    const payload = { prompt: instruction.trim(), working_dir: projectPath, user_id: String(ownerId),
-      backend, auto_start: true, correlation_id: correlationId };
+    const payload = { working_dir: projectPath, user_id: String(ownerId), backend,
+      auto_start: !empty, correlation_id: correlationId };
+    if (empty) { payload.empty = true; payload.thread_name = threadName.trim().slice(0, 100); }
+    else payload.prompt = instruction.trim();
     if (model) payload.model = model;
     try {
       const result = await this.#request("/api/spawn", {
@@ -132,11 +136,17 @@ export class EbiClient {
       // The thread may exist even when the answer was lost. Query its durable
       // correlation, never repeat the spawn request with a new identity.
       try {
-        const result = await this.#request(`/api/correlations/${encodeURIComponent(correlationId)}`);
-        if (!THREAD_ID.test(result.thread_id)) throw new Error("Invalid correlated thread ID");
+        const result = await this.spawnCorrelation(correlationId);
         return { status: "existing", ...result };
       } catch { throw new Error(`Session creation uncertain for ${correlationId}`, { cause: error }); }
     }
+  }
+
+  async spawnCorrelation(correlationId) {
+    if (!/^[\w-]{8,100}$/.test(correlationId)) throw new Error("Invalid correlation identity");
+    const result = await this.#request(`/api/correlations/${encodeURIComponent(correlationId)}`);
+    if (!THREAD_ID.test(result.thread_id)) throw new Error("Invalid correlated thread ID");
+    return result;
   }
 
   async setRuntime(threadId, { backend, model }) {

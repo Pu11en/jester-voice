@@ -116,6 +116,8 @@ export class WorkerClient extends EventEmitter {
       }
       return true;
     });
+    if (dropCount) this.emit("drop", { reason: "stale_audio", speaker: id, frames: dropCount });
+    return dropCount;
   }
 
   #flush() {

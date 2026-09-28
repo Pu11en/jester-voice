@@ -17,6 +17,9 @@ test("finds read-only status requests without treating a passing name as an acti
   assert.deepEqual(parseOwnerIntent("Start a session in jester-voice with Claude Sonnet to check tests"),
     { kind: "create", project: "jester-voice", runtime: "Claude", model: "Sonnet",
       instruction: "check tests" });
+  assert.deepEqual(parseOwnerIntent("Jester, open an empty thread in Jobs"),
+    { kind: "create", project: "Jobs", runtime: null, model: null,
+      instruction: null, empty: true });
   assert.deepEqual(parseOwnerIntent("Jester, find the session where we worked on login"),
     { kind: "history", query: "login" });
   assert.deepEqual(parseOwnerIntent("When Zoro finishes, tell Sanji to run tests"),
@@ -30,6 +33,9 @@ test("finds read-only status requests without treating a passing name as an acti
   assert.deepEqual(parseOwnerIntent("Jester, what happened with Zoro's audit?",
     { knownTags: new Set(["zoro"]) }), { kind: "session-discuss", target: "zoro" });
   assert.equal(isSessionReadFollowUp("What is this project?"), true);
+  assert.equal(isSessionReadFollowUp("Why?"), true);
+  assert.equal(isSessionReadFollowUp("What should I do next?"), true);
+  assert.equal(isSessionReadFollowUp("Tell me more"), true);
   assert.equal(isSessionReadFollowUp("What is the weather?"), false);
   assert.deepEqual(parseOwnerIntent("Jester, help me with Zoro's audit"),
     { kind: "session-discuss", target: "Zoro" });
@@ -70,4 +76,7 @@ test("final direct address and corrected destination yield one task draft", () =
     { kind: "message", target: "Frankie", instruction: "just test" });
   assert.deepEqual(parseOwnerIntent("Tell Frankie to work in A—actually in B"),
     { kind: "clarify", reason: "task-correction", target: "Frankie" });
+  assert.equal(parseOwnerIntent("Tell me more"), null);
+  assert.deepEqual(parseOwnerIntent("Tell Zoro to review this, but don't send that yet"),
+    { kind: "clarify", reason: "hold" });
 });

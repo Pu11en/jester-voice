@@ -20,6 +20,8 @@ test("application starts the worker and presence, wires audio, then shuts down c
     createConversationImpl: (options) => { assert.ok(options.stallClip.length > 0); return conversation; },
     createEventWatcherImpl: () => ({ async start() {}, async close() {} }),
     createDependenciesImpl: () => ({ async start() {}, async close() {} }),
+    createActionJournalImpl: () => ({ async start() {}, async close() {} }),
+    createIntentProposerImpl: () => ({ async close() {} }),
   });
   await app.start();
   assert.deepEqual(calls.slice(0, 3), [
@@ -42,6 +44,8 @@ test("startup failure closes constructed services", async () => {
     createConversationImpl: () => ({ start() {}, async close() {} }),
     createEventWatcherImpl: () => ({ async start() {}, async close() {} }),
     createDependenciesImpl: () => ({ async start() {}, async close() {} }),
+    createActionJournalImpl: () => ({ async start() {}, async close() {} }),
+    createIntentProposerImpl: () => ({ async close() {} }),
   });
   await assert.rejects(app.start(), /fake offline login/);
   assert.deepEqual(calls, ["presence", "brain", "worker", "voice"]);

@@ -13,6 +13,7 @@ const STOP = new RegExp(`^(?:stop|interrupt)(?:\\s+the)?(?:\\s+current)?(?:\\s+t
 const CLOSE = new RegExp(`^(?:close|archive|end)(?:\\s+the)?(?:\\s+session)?\\s+${NAME}[?.!]*$`, "iu");
 const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(codex|claude|sonnet|deepseek|dsh)(?:\\s+(sonnet|opus|haiku|auto))?[?.!]*$`, "iu");
 const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
+const CREATE_EMPTY = /^(?:start|create|open|make)(?: me)?(?: an?| the)?(?: new)? (?:empty|blank) (?:session|thread) (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)?[?.!]*$/iu;
 const HISTORY = /^(?:find|look up|search for)(?: the)? (?:session|thread)(?: where we| that| about| for)? (.+?)[?.!]*$/iu;
 const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|completes)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
 const WHEN_RESULTS = /^(?:when|after)\s+(.+?)\s+(?:finish|finishes|are done|is done|complete|completes)[,;:]?\s+(?:tell|show|give)\s+me\s+(?:what\s+(?:i|we)\s+can\s+test|(?:the\s+)?test(?:ing)?\s+(?:ideas|steps|suggestions))[?.!]*$/iu;
@@ -30,6 +31,7 @@ function resultTargets(raw) {
 /** Contextual read questions after a named session was just discussed. */
 export function isSessionReadFollowUp(raw) {
   const text = String(raw || "").trim().replace(WAKE, "").trim();
+  if (/^(?:why|tell me more|what should i do next)[?.!]*$/iu.test(text)) return true;
   return /^(?:what|how|why|is it|did it|tell me|explain|help me|should i)\b/i.test(text) &&
     /\b(?:this project|that project|the project|its work|its result|it finish|it do|it working|it blocked|next step|next decision|that result)\b/i.test(text);
 }
@@ -37,6 +39,10 @@ export function isSessionReadFollowUp(raw) {
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   const text = String(raw || "").trim().replace(WAKE, "").trim();
+  if (/\b(?:but|wait|hold on)[,;\s]+(?:don['’]?t|do\s+not)\s+(?:send|post|give|dispatch)\b/iu.test(text) ||
+      /\b(?:hold off|wait before (?:sending|posting))\b/iu.test(text)) {
+    return { kind: "clarify", reason: "hold" };
+  }
   if (/^who(?:'s| is)\s+(?:running|working|active)[?.!]*$/i.test(text)) return { kind: "status-all" };
   if (/^(?:update me on (?:my )?sessions|give me a (?:session|sessions) update|what(?:'s| is) happening with (?:my )?sessions)[?.!]*$/i.test(text)) {
     return { kind: "status-all" };
@@ -56,6 +62,9 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   if (close) return { kind: "close", target: close[1] };
   const runtime = RUNTIME.exec(text);
   if (runtime) return { kind: "runtime", target: runtime[1], runtime: runtime[2], model: runtime[3] || null };
+  const empty = CREATE_EMPTY.exec(text);
+  if (empty) return { kind: "create", project: empty[1].trim(), runtime: empty[2] || null,
+    model: empty[3] || null, instruction: null, empty: true };
   const create = CREATE.exec(text);
   if (create) return { kind: "create", project: create[1].trim(), runtime: create[2] || null,
     model: create[3] || null, instruction: create[4].trim() };
@@ -79,6 +88,7 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
       { kind: "clarify", reason: "result-targets" };
   }
 
+  if (/^(?:tell|ask|message)\s+me\b/iu.test(text)) return null;
   const explicit = TELL.exec(text);
   const direct = explicit ? null : DIRECT.exec(text);
   // The voice loop supplies current tags. A comma after an ordinary first

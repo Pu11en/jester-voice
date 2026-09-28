@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { PassThrough } from "node:stream";
 import { performance } from "node:perf_hooks";
@@ -39,7 +39,7 @@ function mergeText(first, second) {
  */
 export class Conversation {
   constructor({ worker, brain, voice, ownerId, presence = null, transcript = null, stallClip = null,
-    unavailableClip = null, ownerRouter = null,
+    unavailableClip = null, ownerRouter = null, intentProposer = null,
     logFile = "logs/turns.jsonl", now = () => performance.now(), logger = console } = {}) {
     if (!worker || !brain || !voice || !ownerId) throw new Error("worker, brain, voice, and ownerId are required");
     this.worker = worker;
@@ -51,6 +51,7 @@ export class Conversation {
     this.stallClip = stallClip;
     this.unavailableClip = unavailableClip;
     this.ownerRouter = ownerRouter;
+    this.intentProposer = intentProposer;
     this.logFile = logFile;
     this.now = now;
     this.attention = new Attention(now);
@@ -64,11 +65,15 @@ export class Conversation {
     this.turnNumber = 0;
     this.ownerSpeechVersion = 0;
     this.ownerSpeaking = false;
+    this.ownerAudioIncomplete = false;
     this.lastTimings = null;
     this.interrupting = Promise.resolve();
     this.logQueue = Promise.resolve();
     this.onEvent = (event) => this.#event(event);
     this.onWorkerFatal = (error) => this.#workerFailed(error);
+    this.onWorkerDrop = (event) => {
+      if (String(event.speaker) === this.ownerId) this.ownerAudioIncomplete = true;
+    };
     this.onVoiceDisconnect = () => this.#voiceDisconnected();
     this.onCapturePaused = (speakers) => {
       this.#voiceDisconnected();
@@ -116,6 +121,7 @@ export class Conversation {
     this.mode = "conversation";
     this.worker.on("event", this.onEvent);
     this.worker.on("fatal", this.onWorkerFatal);
+    this.worker.on("drop", this.onWorkerDrop);
     this.voice.on?.("disconnect", this.onVoiceDisconnect);
     this.presence?.on?.("reset", this.onPresenceReset);
     this.presence?.on?.("restoredPresence", this.onRestoredPresence);
@@ -136,6 +142,7 @@ export class Conversation {
     this.ownerSpeaking = false;
     this.worker.off("event", this.onEvent);
     this.worker.off("fatal", this.onWorkerFatal);
+    this.worker.off("drop", this.onWorkerDrop);
     this.voice.off?.("disconnect", this.onVoiceDisconnect);
     this.presence?.off?.("reset", this.onPresenceReset);
     this.presence?.off?.("restoredPresence", this.onRestoredPresence);
@@ -159,9 +166,13 @@ export class Conversation {
       // A second person's speech ends the owner's active exchange. Their
       // words remain in the room transcript but never reach Luna or EBI.
       if (event?.ev === "speech_start" || event?.ev === "turn_end") {
+        this.ownerSpeechVersion += 1;
         this.attention.reset();
         this.ownerRouter?.reset();
         this.createDraft.reset();
+        if (this.reply) this.#stopReply();
+        this.#stopLocalClip();
+        void this.#abortDraft();
       }
       return;
     }
@@ -171,6 +182,7 @@ export class Conversation {
   }
 
   #pause(event) {
+    if (event.incomplete || this.ownerAudioIncomplete) return;
     if (this.turn || !(event.prob > 0.3) || !event.text?.trim()) return;
     if (this.mode === "transcript" || possibleModeCommand(event.text)) return;
     // Waking requires a completed owner turn; a tentative name must not open
@@ -193,6 +205,7 @@ export class Conversation {
   #speechStart() {
     this.ownerSpeechVersion += 1;
     this.ownerSpeaking = true;
+    void this.intentProposer?.interrupt?.().catch?.(() => {});
     this.#cancelThinking();
     this.#stopLocalClip();
     if (this.reply) {
@@ -223,6 +236,21 @@ export class Conversation {
 
   async #turnEnd(event) {
     this.ownerSpeaking = false;
+    if (event.incomplete || this.ownerAudioIncomplete) {
+      const wasAddressed = this.attention.engaged ||
+        /^(?:(?:hey|hi|hello|okay|ok|yo)\s+)?jester\b/iu.test(event.text?.trim() || "");
+      this.ownerAudioIncomplete = false;
+      this.ownerSpeechVersion += 1;
+      this.attention.reset();
+      this.ownerRouter?.reset();
+      this.createDraft.reset();
+      await this.#abortDraft();
+      if (wasAddressed && this.started && this.mode === "conversation" && event.text?.trim()) {
+        this.#speakControl("I missed part of that. Please say Jester and repeat it.", event);
+        this.turn.noRefresh = true;
+      }
+      return;
+    }
     if (!event.text?.trim()) return;
     const speechVersion = this.ownerSpeechVersion;
     if (await this.presence?.handleOwnerTurn(event.text,
@@ -263,6 +291,7 @@ export class Conversation {
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
     }
     if (!this.attention.accept(event.text)) {
+      this.ownerSpeechVersion += 1;
       if (!this.attention.engaged) {
         this.ownerRouter?.reset();
         this.createDraft.reset();
@@ -295,7 +324,7 @@ export class Conversation {
           intent: { kind: "create", project: create.project, instruction: create.instruction,
             runtime: null, model: null },
           shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
-            this.mode === "conversation" && !this.presence?.paused,
+            this.attention.engaged && this.mode === "conversation" && !this.presence?.paused,
         });
       } catch (error) {
         this.logger.warn?.("[conversation] owner route:", error.message);
@@ -304,11 +333,20 @@ export class Conversation {
       if (response && this.started && speechVersion === this.ownerSpeechVersion) this.#speakControl(response, event);
       return;
     }
-    const intent = this.ownerRouter ?
+    let intent = this.ownerRouter ?
       parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) ||
       (wasEngaged && this.ownerRouter.hasReadContext?.() && isSessionReadFollowUp(text) ?
         { kind: "session-discuss", target: "it" } : null) : null;
+    if (!intent && this.ownerRouter && this.intentProposer?.likelyWork(text,
+      [...this.attention.sessionTags])) {
+      intent = await this.intentProposer.propose(text, [...this.attention.sessionTags]);
+      if (!this.started || speechVersion !== this.ownerSpeechVersion ||
+          this.mode !== "conversation") return;
+    }
     if (intent) {
+      void this.#log({ type: "owner_intent", kind: intent.kind,
+        target: intent.target || intent.project || null,
+        reason: intent.reason || null, speaker: this.ownerId });
       this.createDraft.reset();
       await this.#abortDraft();
       if (["message", "stop", "close", "runtime", "create", "dependency", "dependency-group", "result-watch"].includes(intent.kind)) {
@@ -341,9 +379,9 @@ export class Conversation {
       let response;
       try {
         response = await this.ownerRouter.handle(text, {
-          speakerId: this.ownerId, allowReference: wasEngaged,
+          speakerId: this.ownerId, allowReference: wasEngaged, intent,
           shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
-            this.mode === "conversation" && !this.presence?.paused,
+            this.attention.engaged && this.mode === "conversation" && !this.presence?.paused,
         });
       } catch (error) {
         this.logger.warn?.("[conversation] owner route:", error.message);
@@ -585,6 +623,7 @@ export class Conversation {
     this.ownerRouter?.reset();
     this.ownerSpeechVersion += 1;
     this.ownerSpeaking = false;
+    this.ownerAudioIncomplete = false;
     this.#stopLocalClip();
     this.#cancelThinking();
     if (this.reply) this.#stopReply();
@@ -654,12 +693,15 @@ export class Conversation {
       try {
         await mkdir(dirname(this.logFile), { recursive: true });
         await appendBounded(this.logFile, `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`, MAX_TURN_LOG_BYTES);
+        await chmod(this.logFile, 0o600);
       } catch (error) {
         this.logger.warn?.("[conversation] turn log:", error.message);
       }
     });
     return this.logQueue;
   }
+
+  traceRoute(entry) { void this.#log({ type: "ebi_action", ...entry }); }
 }
 
 export { heardWords, mergeText };

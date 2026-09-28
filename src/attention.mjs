@@ -80,7 +80,7 @@ export class Attention {
 
   accept(text) {
     const kind = this.classify(text);
-    if (kind === "ending" || kind === "control") this.reset();
+    if (kind === "ending" || kind === "control" || kind === "ambient") this.reset();
     if (kind !== "conversation") return false;
     this.refresh();
     return true;

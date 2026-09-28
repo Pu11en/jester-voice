@@ -68,7 +68,7 @@ test("named side addresses stay ambient while greeting-led follow-ups refresh at
     "Hey, Alex, pass the salt", "Hey Alex can you help", "María, dinner is ready"]) {
     assert.equal(attention.classify(text), "ambient", text);
     assert.equal(attention.accept(text), false, text);
-    assert.equal(attention.until, FOLLOW_UP_MS, text);
+    assert.equal(attention.until, null, text);
   }
   now = FOLLOW_UP_MS;
   assert.equal(attention.engaged, false);

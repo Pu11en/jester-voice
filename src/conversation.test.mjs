@@ -59,7 +59,8 @@ async function withConversation(options, fn) {
   const dir = await mkdtemp(join(tmpdir(), "jester-conversation-"));
   const parts = setup(options);
   const conversation = new Conversation({ ...parts, now: options.now, ownerId: "owner",
-    ownerRouter: options.ownerRouter, logFile: join(dir, "turns.jsonl") });
+    ownerRouter: options.ownerRouter, intentProposer: options.intentProposer,
+    logFile: join(dir, "turns.jsonl") });
   conversation.start();
   // Existing playback/timing tests exercise an already engaged exchange.
   // Attention regressions below use dormant: true and wake through worker events.
@@ -103,6 +104,23 @@ test("named owner task routes after final speech; transcript-only and guests do 
   });
 });
 
+test("a natural model proposal is checked through the owner action router", async () => {
+  const handled = [];
+  const ownerRouter = { reset() {}, sessionTags: async () => ["zoro"],
+    handle: async (_text, options) => { handled.push(options); return "I posted your task to Zoro."; } };
+  const intentProposer = { likelyWork: () => true,
+    propose: async () => ({ kind: "message", target: "zoro", instruction: "review the login page" }),
+    interrupt: async () => {} };
+  await withConversation({ ownerRouter, intentProposer, dormant: true }, async ({ events }) => {
+    events("turn_end", { text: "Jester, could you put this in Zoro's thread: review the login page" });
+    await waitUntil(() => handled.length === 1, "natural task route");
+    assert.deepEqual(handled[0].intent, { kind: "message", target: "zoro",
+      instruction: "review the login page" });
+    assert.equal(handled[0].speakerId, "owner");
+    assert.equal(handled[0].shouldAct(), true);
+  });
+});
+
 test("an ordinary comma-led follow-up reaches the brain, not the session router", async () => {
   const handled = [];
   const ownerRouter = { reset() {}, sessionTags: async () => ["frankie"],
@@ -112,6 +130,44 @@ test("an ordinary comma-led follow-up reaches the brain, not the session router"
     await waitUntil(() => brain.asks.length === 1, "ordinary follow-up");
     assert.deepEqual(brain.asks, ["Actually, can you explain that again?"]);
     assert.equal(handled.length, 0);
+  });
+});
+
+test("guest speech or an owner side address cancels a pending task", async () => {
+  for (const interruption of ["guest", "side address"]) {
+    const writes = [];
+    const ownerRouter = { reset() {}, sessionTags: async () => ["zoro"],
+      handle: async (_text, { shouldAct }) => {
+        if (shouldAct()) writes.push("posted");
+        return "I posted it.";
+      } };
+    await withConversation({ ownerRouter, dormant: true }, async ({ events, conversation }) => {
+      events("turn_end", { text: "Jester, tell Zoro to review the page" });
+      await tick();
+      if (interruption === "guest") events("speech_start", { speaker: "guest" });
+      else events("turn_end", { text: "Bob, how is your day?" });
+      await tick();
+      assert.equal(conversation.attention.engaged, false);
+      await new Promise(resolve => setTimeout(resolve, 850));
+      assert.deepEqual(writes, [], interruption);
+      events("turn_end", { text: "Tell Zoro to edit files" });
+      await tick();
+      assert.deepEqual(writes, [], "a bare command cannot reopen the exchange");
+    });
+  }
+});
+
+test("dropped owner audio makes an otherwise valid task unsafe", async () => {
+  let actions = 0;
+  const ownerRouter = { reset() {}, sessionTags: async () => ["zoro"],
+    handle: async () => { actions += 1; return "Posted."; } };
+  await withConversation({ ownerRouter, dormant: true }, async ({ events, worker }) => {
+    events("speech_start");
+    worker.emit("drop", { speaker: "owner", reason: "input_queue_full" });
+    events("turn_end", { text: "Jester, tell Zoro to review the page", incomplete: false });
+    await new Promise(resolve => setTimeout(resolve, 850));
+    assert.equal(actions, 0);
+    assert.ok(worker.sent.some(item => item.op === "say" && /missed part/i.test(item.text)));
   });
 });
 

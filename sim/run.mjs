@@ -60,7 +60,7 @@ function fixture(scenarioId) {
   return { client, writes, watches, groups };
 }
 
-function makeParts(fixtureState) {
+function makeParts(fixtureState, scenarioId) {
   const worker = new EventEmitter();
   worker.sent = [];
   worker.send = message => {
@@ -99,10 +99,17 @@ function makeParts(fixtureState) {
     async cancelPending() {},
   };
   const ownerRouter = new OwnerRouter({ client: fixtureState.client, ownerId, dependencies });
+  const intentProposer = scenarioId === "natural-assignment" ? {
+    likelyWork: text => /could you put this in zoro/iu.test(text),
+    async propose() { return { kind: "message", target: "zoro",
+      instruction: "review login and don't edit files" }; },
+    async interrupt() {},
+  } : null;
   const presence = new Presence({ client: new EventEmitter(), voice, brain, transcript,
     config: { ownerId, guildId: "guild", voiceChannelId: "room", transcriptChannelId: "transcript" },
     logger: { warn() {} } });
-  const conversation = new Conversation({ worker, brain, voice, ownerId, presence, transcript, ownerRouter,
+  const conversation = new Conversation({ worker, brain, voice, ownerId, presence, transcript,
+    ownerRouter, intentProposer,
     logFile: resolve(root, "sim/results/turns.jsonl"), logger: { warn() {} } });
   return { worker, brain, voice, presence, conversation };
 }
@@ -141,7 +148,7 @@ export function grade(expect, actual) {
 
 async function runScenario(scenario) {
   const fixtureState = fixture(scenario.id);
-  const parts = makeParts(fixtureState);
+  const parts = makeParts(fixtureState, scenario.id);
   const { worker, brain, voice, conversation } = parts;
   conversation.start();
   const steps = [];

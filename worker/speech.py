@@ -219,6 +219,7 @@ class SpeechWorker:
         self.tts = tts
         self.emit = emit
         self.active: dict[str, threading.Event] = {}
+        self.threads: set[threading.Thread] = set()
         self.lock = threading.Lock()
         self.emit_lock = threading.Lock()
 
@@ -254,14 +255,26 @@ class SpeechWorker:
                 with self.lock:
                     if self.active.get(identifier) is stopped:
                         del self.active[identifier]
+                    self.threads.discard(threading.current_thread())
 
-        threading.Thread(target=run, name=f"jester-tts-{identifier}", daemon=True).start()
+        thread = threading.Thread(target=run, name=f"jester-tts-{identifier}", daemon=True)
+        with self.lock:
+            self.threads.add(thread)
+        thread.start()
 
     def cancel(self, identifier: str) -> None:
         with self.lock:
             stopped = self.active.get(str(identifier))
             if stopped is not None:
                 stopped.set()
+
+    def close(self) -> None:
+        with self.lock:
+            for stopped in self.active.values():
+                stopped.set()
+            threads = list(self.threads)
+        for thread in threads:
+            thread.join(timeout=10)
 
 
 @dataclass
@@ -274,6 +287,7 @@ class SpeakerState:
     pause_checked: bool = False
     last_prob: float = 0.0
     last_text: str = ""
+    clipped: bool = False
 
     def clear_turn(self) -> None:
         self.pcm_bytes.clear()
@@ -284,6 +298,7 @@ class SpeakerState:
         self.pause_checked = False
         self.last_prob = 0.0
         self.last_text = ""
+        self.clipped = False
 
 
 class SpeechPipeline:
@@ -331,6 +346,7 @@ class SpeechPipeline:
             state.audio.append(frame)
             if len(state.audio) > MAX_UTTERANCE_FRAMES:
                 del state.audio[:len(state.audio) - MAX_UTTERANCE_FRAMES]
+                state.clipped = True
             if probability >= VAD_START_THRESHOLD:
                 state.silence_frames = 0
                 state.silence_started = None
@@ -359,6 +375,7 @@ class SpeechPipeline:
         state.last_prob = self.turn_scorer.score(audio)
         turn_ms = round((time.perf_counter() - turn_started) * 1000)
         self.emit({"ev": "pause", "speaker": speaker, "prob": state.last_prob, "text": state.last_text,
+                   "incomplete": state.clipped,
                    "ms": {"stt": stt_ms, "smart_turn": turn_ms}})
         silence_ms = max(0.0, (now - state.silence_started) * 1000) if state.silence_started is not None else 0.0
         last_word = state.last_text.lower().strip().split()[-1].strip(".,!?;:'\"()[]{}") if state.last_text.strip() else ""
@@ -369,7 +386,8 @@ class SpeechPipeline:
     def _finish(self, speaker: str, state: SpeakerState, now: float) -> None:
         text = state.last_text
         duration_ms = round(len(self._audio(state)) * 1000 / SAMPLE_RATE)
-        self.emit({"ev": "turn_end", "speaker": speaker, "text": text, "ms": {"utterance": duration_ms}})
+        self.emit({"ev": "turn_end", "speaker": speaker, "text": text,
+                   "incomplete": state.clipped, "ms": {"utterance": duration_ms}})
         state.clear_turn()
 
     def check_timeouts(self) -> None:
@@ -442,6 +460,7 @@ def main() -> None:
                 # recover in place; let WorkerClient restart the model process
                 # instead of silently failing on every later utterance.
                 raise SystemExit(2) from error
+    speech.close()
 
 
 def _vram_usage() -> str:

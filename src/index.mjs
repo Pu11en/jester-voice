@@ -13,6 +13,8 @@ import { EbiClient } from "./ebi-client.mjs";
 import { OwnerRouter } from "./owner-router.mjs";
 import { EventWatcher } from "./event-watcher.mjs";
 import { Dependencies } from "./dependencies.mjs";
+import { ActionJournal } from "./action-journal.mjs";
+import { IntentProposer } from "./intent-proposer.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,6 +26,8 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   createConversationImpl = (options) => new Conversation(options),
   createEventWatcherImpl = (options) => new EventWatcher(options),
   createDependenciesImpl = (options) => new Dependencies(options),
+  createActionJournalImpl = (options) => new ActionJournal(options),
+  createIntentProposerImpl = (options) => new IntentProposer(options),
 } = {}) {
   config ||= await loadConfig();
   const stallClip = await readFile(resolve(projectRoot, "assets/thinking.pcm"));
@@ -40,10 +44,13 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const brain = createBrainImpl({});
   const ebiClient = new EbiClient({ baseUrl: config.ebiApiUrl, secret: config.ebiApiSecret });
   const dependencies = createDependenciesImpl({ client: ebiClient, ownerId: config.ownerId });
+  const actionJournal = createActionJournalImpl();
+  const intentProposer = createIntentProposerImpl();
   const ownerRouter = new OwnerRouter({
     client: ebiClient,
     ownerId: config.ownerId,
     dependencies,
+    actionJournal,
     postLink: async (name, link) => {
       const channel = voice.client.channels?.cache?.get(config.transcriptChannelId) ||
         await voice.client.channels?.fetch?.(config.transcriptChannelId);
@@ -54,7 +61,8 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const transcript = createTranscriptImpl({ client: voice.client, channelId: config.transcriptChannelId });
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
   const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId,
-    presence, transcript, stallClip, unavailableClip, ownerRouter });
+    presence, transcript, stallClip, unavailableClip, ownerRouter, intentProposer });
+  ownerRouter.trace = entry => conversation.traceRoute?.(entry);
   const eventWatcher = createEventWatcherImpl({ client: ebiClient, conversation, presence,
     dependencies,
     postResults: async (markdown, id) => {
@@ -81,9 +89,10 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   let started = false;
   let closing = null;
   return {
-    worker, voice, brain, presence, conversation, transcript, eventWatcher, dependencies,
+    worker, voice, brain, presence, conversation, transcript, eventWatcher, dependencies, actionJournal, intentProposer,
     async start() {
       if (started) return;
+      await actionJournal.start();
       await worker.start();
       conversation.start();
       try {
@@ -106,9 +115,11 @@ export async function startApp({ config, createVoiceImpl = createVoice,
         for (const close of [
           () => eventWatcher.close(),
           () => dependencies.close(),
+          () => actionJournal.close(),
           () => presence.stop(),
           () => conversation.close(),
           () => brain.close(),
+          () => intentProposer.close(),
           () => worker.close(),
           () => voice.destroy(),
         ]) {

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { OwnerRouter } from "./owner-router.mjs";
+import { ActionJournal } from "./action-journal.mjs";
 
 const ownerId = "488763953397235712";
 const franky = { threadId: "1553899450227757156", tag: "franky", name: "Franky", state: "running", currentTask: "Checking login", closed: false };
@@ -73,6 +77,55 @@ test("posts one faithful task to the exact resolved thread and binds follow-up",
   assert.equal(calls.length, 2);
 });
 
+test("a lost spoken response is reconciled after restart without a second send", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-route-actions-"));
+  try {
+    const { client, calls } = setup();
+    let receiptKnown = false;
+    client.sendSpoken = async payload => { calls.push(payload); throw new Error("lost response"); };
+    client.spokenReceipt = async () => {
+      if (!receiptKnown) throw new Error("receipt unavailable");
+      return { status: "posted" };
+    };
+    const file = join(dir, "actions.json");
+    const firstJournal = new ActionJournal({ file });
+    await firstJournal.start();
+    const first = new OwnerRouter({ client, ownerId, actionJournal: firstJournal });
+    assert.match(await first.handle("Tell Frankie to check login", { speakerId: ownerId }), /couldn't verify/);
+    assert.equal(calls.length, 1);
+    await firstJournal.close();
+    receiptKnown = true;
+    const secondJournal = new ActionJournal({ file });
+    await secondJournal.start();
+    const second = new OwnerRouter({ client, ownerId, actionJournal: secondJournal });
+    assert.match(await second.handle("Tell Frankie to check login", { speakerId: ownerId }), /posted/);
+    assert.equal(calls.length, 1);
+    await secondJournal.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("a missing EBI receipt retries only under its saved request ID", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-route-actions-"));
+  try {
+    const { client, calls } = setup();
+    client.sendSpoken = async payload => {
+      calls.push(payload);
+      if (calls.length === 1) throw new Error("connection lost before reserve");
+      return { status: "posted", request_id: payload.requestId };
+    };
+    client.spokenReceipt = async () => { const error = new Error("not found"); error.status = 404; throw error; };
+    const file = join(dir, "actions.json");
+    const journal = new ActionJournal({ file });
+    await journal.start();
+    const router = new OwnerRouter({ client, ownerId, actionJournal: journal });
+    assert.match(await router.handle("Tell Frankie to check login", { speakerId: ownerId }), /couldn't verify/);
+    assert.match(await router.handle("Tell Frankie to check login", { speakerId: ownerId }), /posted/);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].requestId, calls[1].requestId);
+    await journal.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("final corrected task wins while changed and ambiguous targets do not dispatch", async () => {
   const { router, calls, setRows } = setup();
   assert.match(await router.handle("Tell Frankie to deploy—actually just test", { speakerId: ownerId }), /posted/);
@@ -104,6 +157,44 @@ test("creates a Codex session only in a verified project with its first task", a
     { speakerId: ownerId });
   assert.deepEqual(calls[1][1], { projectPath: "/projects/jester-voice",
     instruction: "check tests", ownerId, backend: "claude", model: "sonnet" });
+});
+
+test("an explicit empty session creates no invented first task", async () => {
+  const { router, calls, client } = setup();
+  client.resolveProject = async () => ({ kind: "local_available", locally_verified: true,
+    path: "/projects/jobs", name: "Jobs" });
+  assert.match(await router.handle("Jester, open an empty thread in Jobs",
+    { speakerId: ownerId }), /No task is queued/);
+  assert.deepEqual(calls[0], ["spawn", { projectPath: "/projects/jobs", instruction: null,
+    empty: true, threadName: "Jobs", ownerId, backend: "codex", model: null }]);
+});
+
+test("a lost session creation response is reconciled without a second spawn", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-spawn-actions-"));
+  try {
+    const { client, calls } = setup();
+    let found = false;
+    client.spawnSession = async payload => { calls.push(["spawn", payload]); throw new Error("lost response"); };
+    client.spawnCorrelation = async () => {
+      if (!found) throw new Error("not yet visible");
+      return { thread_id: "1554146845415055445", voice_label: "jinbe", status: "existing" };
+    };
+    const file = join(dir, "actions.json");
+    const firstJournal = new ActionJournal({ file });
+    await firstJournal.start();
+    const first = new OwnerRouter({ client, ownerId, actionJournal: firstJournal });
+    assert.match(await first.handle("Create a session in jester-voice to check tests",
+      { speakerId: ownerId }), /couldn't verify/);
+    await firstJournal.close();
+    found = true;
+    const secondJournal = new ActionJournal({ file });
+    await secondJournal.start();
+    const second = new OwnerRouter({ client, ownerId, actionJournal: secondJournal });
+    assert.match(await second.handle("Create a session in jester-voice to check tests",
+      { speakerId: ownerId }), /jinbe/);
+    assert.equal(calls.length, 1);
+    await secondJournal.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test("runtime change and close apply only to the named session", async () => {
