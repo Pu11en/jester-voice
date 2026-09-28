@@ -1,5 +1,7 @@
 # Jester voice trial: findings and fix plan
 
+For the full voice-to-EBI commander workflow, see [commander readiness review](COMMANDER-READINESS-2026-09-28.md).
+
 Review date: September 28, 2026. This is a diagnosis and plan, not a claim that the fixes are built or that the voice experience is ready. The evidence is the local Jester service journal, its turn metrics, the two latest room transcripts, and the current code. The 112 Node and 6 speech checks passed before the trial, but they do not run a long real GPU or Discord conversation.
 
 ## What the trial established
