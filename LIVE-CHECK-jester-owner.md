@@ -17,7 +17,7 @@ These are Drew's first checks after the local build is integrated and the live s
 
 ## C — Find and control the right EBI session
 
-First run C against fake EBI sessions and receipts. In Discord, use a clearly identified harmless test session and one benign prompt chosen by Drew; do not send a test assignment to an unrelated live work thread. Check the room transcript against the exact prompt posted in the destination thread.
+The fake EBI session and receipt checks pass, and the owner controls are loaded in the local services. In Discord, use a clearly identified harmless test session and one benign prompt chosen by Drew; do not send a test assignment to an unrelated live work thread. Check the room transcript against the exact prompt posted in the destination thread.
 
 1. **Find:** Ask `What is Frankie doing?` Jester recognizes `Frankie` as the current `franky` tag, reads real EBI status, and names the exact session. `Who's running?` lists current work. Unknown or reused names lead to one short clarification and no action.
 2. **Send:** During an active Jester conversation, say `And Frankie, we need to [benign test task]` or directly address `Frankie, ...`; Jester waits for the complete thought, strips only filler and superseded corrections, and posts one faithful prompt to Frankie's current exact thread ID. A passing mention of Frankie or a dormant `Frankie, ...` sends nothing. Repeat the direct-address fake check for every current tag/alias so the attention gate cannot special-case only Zoro.
@@ -28,4 +28,4 @@ First run C against fake EBI sessions and receipts. In Discord, use a clearly id
 7. **Track:** Jester distinguishes accepted, posted/started, finished, failed, and unknown. A request timeout, replayed transcript, reconnect, or retry never makes a duplicate thread post or starts the task twice. A completion or blocker is reported from EBI evidence, not Luna memory.
 8. **Block modes:** Repeat a harmless tag instruction while `Jester just listen` is active or after the 60-second window ends. It appears in the transcript but sends no work.
 
-The [primary-source routing research](planning/wayfinder-jester/research/voice-session-routing-patterns.md) maps these checks to established dialog, Discord identity, tool-call, and idempotency patterns. This checklist is an acceptance target, not a claim that C is implemented in the current live Jester.
+The [primary-source routing research](planning/wayfinder-jester/research/voice-session-routing-patterns.md) maps these checks to established dialog, Discord identity, tool-call, and idempotency patterns. C is implemented and loaded locally, but these live checks have not yet been completed; automatic checks cannot establish its conversational quality or prove that a real Discord task reached the intended thread.
