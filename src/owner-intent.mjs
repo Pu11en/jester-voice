@@ -8,6 +8,8 @@ const STOP = new RegExp(`^(?:stop|interrupt)(?:\\s+the)?(?:\\s+current)?(?:\\s+t
 const CLOSE = new RegExp(`^(?:close|archive|end)(?:\\s+the)?(?:\\s+session)?\\s+${NAME}[?.!]*$`, "iu");
 const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(codex|claude|sonnet|deepseek|dsh)(?:\\s+(sonnet|opus|haiku|auto))?[?.!]*$`, "iu");
 const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
+const HISTORY = /^(?:find|look up|search for)(?: the)? (?:session|thread)(?: where we| that| about| for)? (.+?)[?.!]*$/iu;
+const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|completes)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
 
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw) {
@@ -24,6 +26,10 @@ export function parseOwnerIntent(raw) {
   const create = CREATE.exec(text);
   if (create) return { kind: "create", project: create[1].trim(), runtime: create[2] || null,
     model: create[3] || null, instruction: create[4].trim() };
+  const history = HISTORY.exec(text);
+  if (history) return { kind: "history", query: history[1].trim().replace(/^(?:worked on|talked about|did)\s+/iu, "") };
+  const when = WHEN.exec(text);
+  if (when) return { kind: "dependency", source: when[1], target: when[2], instruction: when[3].trim() };
 
   const first = TELL.exec(text) || DIRECT.exec(text);
   if (!first) return null;

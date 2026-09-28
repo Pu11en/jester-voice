@@ -61,6 +61,7 @@ export class Conversation {
     this.replyNumber = 0;
     this.turnNumber = 0;
     this.ownerSpeechVersion = 0;
+    this.ownerSpeaking = false;
     this.lastTimings = null;
     this.interrupting = Promise.resolve();
     this.logQueue = Promise.resolve();
@@ -119,6 +120,7 @@ export class Conversation {
     this.ownerRouter?.reset();
     this.mode = "conversation";
     this.ownerSpeechVersion += 1;
+    this.ownerSpeaking = false;
     this.worker.off("event", this.onEvent);
     this.worker.off("fatal", this.onWorkerFatal);
     this.voice.off?.("disconnect", this.onVoiceDisconnect);
@@ -167,6 +169,7 @@ export class Conversation {
 
   #speechStart() {
     this.ownerSpeechVersion += 1;
+    this.ownerSpeaking = true;
     this.#cancelThinking();
     this.#stopLocalClip();
     if (this.reply) {
@@ -196,6 +199,7 @@ export class Conversation {
   }
 
   async #turnEnd(event) {
+    this.ownerSpeaking = false;
     if (!event.text?.trim()) return;
     const speechVersion = this.ownerSpeechVersion;
     if (await this.presence?.handleOwnerTurn(event.text)) {
@@ -241,7 +245,7 @@ export class Conversation {
     const intent = this.ownerRouter ? parseOwnerIntent(text) : null;
     if (intent) {
       await this.#abortDraft();
-      if (["message", "stop", "close", "runtime", "create"].includes(intent.kind)) {
+      if (["message", "stop", "close", "runtime", "create", "dependency"].includes(intent.kind)) {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
@@ -249,6 +253,8 @@ export class Conversation {
       try {
         response = await this.ownerRouter.handle(text, {
           speakerId: this.ownerId, allowReference: wasEngaged,
+          shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
+            this.mode === "conversation" && !this.presence?.paused,
         });
       } catch (error) {
         this.logger.warn?.("[conversation] owner route:", error.message);
@@ -365,6 +371,15 @@ export class Conversation {
     this.reply.brainDone = true;
   }
 
+  /** Speak a checked background update only during a quiet conversation gap. */
+  announce(text) {
+    if (!this.started || this.mode !== "conversation" || this.ownerSpeaking ||
+        this.turn || this.reply || this.localClipId || this.presence?.paused) return false;
+    this.#speakControl(text, { ms: {} });
+    this.turn.noRefresh = true;
+    return true;
+  }
+
   #audioOut(event) {
     if (!this.reply || event.id !== this.reply.activeSayId) return;
     const pcm = Buffer.from(event.pcm, "base64");
@@ -419,7 +434,7 @@ export class Conversation {
     });
     if (this.turn === done.turn) {
       // Give Drew a full follow-up window after even a long spoken answer.
-      this.attention.refresh();
+      if (!done.turn.noRefresh) this.attention.refresh();
       if (!done.turn.brainFailed || !this.#playUnavailable(done.turn)) this.turn = null;
     }
   }
@@ -475,6 +490,7 @@ export class Conversation {
     this.attention.reset();
     this.ownerRouter?.reset();
     this.ownerSpeechVersion += 1;
+    this.ownerSpeaking = false;
     this.#stopLocalClip();
     this.#cancelThinking();
     if (this.reply) this.#stopReply();

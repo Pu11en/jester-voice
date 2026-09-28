@@ -22,10 +22,13 @@ function runtimeChoice(intent) {
 
 /** Deterministic owner actions; model output never enters this action path. */
 export class OwnerRouter {
-  constructor({ client, ownerId, now = () => Date.now() }) {
+  constructor({ client, ownerId, now = () => Date.now(), postLink = null,
+    dependencies = null }) {
     this.client = client;
     this.ownerId = String(ownerId);
     this.now = now;
+    this.postLink = postLink;
+    this.dependencies = dependencies;
     this.bound = null;
   }
 
@@ -45,7 +48,7 @@ export class OwnerRouter {
     return this.client.resolveTag(name);
   }
 
-  async handle(text, { speakerId, allowReference = false } = {}) {
+  async handle(text, { speakerId, allowReference = false, shouldAct = () => true } = {}) {
     if (String(speakerId) !== this.ownerId) return null;
     const intent = parseOwnerIntent(text);
     if (!intent) return null;
@@ -53,7 +56,45 @@ export class OwnerRouter {
     if (intent.kind === "status-all") {
       const sessions = (await this.client.snapshot()).filter(s => !s.closed && s.state === "running");
       if (!sessions.length) return "No EBI sessions are running right now.";
-      return `Running: ${sessions.map(s => s.tag || s.name || "unnamed session").join(", ")}.`;
+      const names = sessions.slice(0, 5).map(s => s.tag || s.name || "unnamed session");
+      return `Running: ${names.join(", ")}${sessions.length > 5 ? `, and ${sessions.length - 5} more` : ""}.`;
+    }
+    if (intent.kind === "history") {
+      const found = await this.client.searchSessions(intent.query);
+      if (!found.length) return `I couldn't find a session about ${intent.query}.`;
+      if (found.length > 1) {
+        const names = found.slice(0, 3).map(item => item.name.slice(0, 60) || "unnamed thread");
+        return `I found ${found.length} matches: ${names.join("; ")}. Please narrow the topic or project.`;
+      }
+      const item = found[0];
+      if (item.link.startsWith("https://discord.com/channels/") && this.postLink) {
+        try {
+          await this.postLink(item.name || intent.query, item.link);
+          return `I found the ${item.name || intent.query} session and put its link in Auto Transcripts.`;
+        } catch { /* The voice answer still tells Drew what was found. */ }
+      }
+      return `I found the ${item.name || intent.query} session, but couldn't post its link.`;
+    }
+    if (intent.kind === "dependency") {
+      if (!this.dependencies) return "Follow-on tasks are unavailable right now.";
+      if (/\b(?:actually|wait|rather|instead)\b/i.test(intent.instruction)) {
+        return "Please say the final follow-on task once more.";
+      }
+      const source = await this.client.resolveTag(intent.source);
+      const destination = await this.client.resolveTag(intent.target);
+      if (source.kind !== "found" || destination.kind !== "found") {
+        return "I couldn't identify both sessions. Please use their current tags.";
+      }
+      if (!['running', 'queued'].includes(source.session.state)) {
+        return `${source.session.tag || intent.source} isn't working on a turn right now.`;
+      }
+      if (source.session.threadId === destination.session.threadId) {
+        return "Those names point to the same session. Please name two different sessions.";
+      }
+      if (!shouldAct()) return null;
+      await this.dependencies.add({ sourceId: source.session.threadId,
+        destinationId: destination.session.threadId, task: intent.instruction });
+      return `When ${source.session.tag || intent.source} finishes its current turn, I'll send the task to ${destination.session.tag || intent.target}.`;
     }
     if (intent.kind === "create") {
       if (/\b(?:actually|wait|rather|instead)\b/i.test(intent.instruction)) {
@@ -65,6 +106,7 @@ export class OwnerRouter {
       }
       const choice = intent.runtime ? runtimeChoice(intent) : { backend: "codex", model: null };
       if (!choice) return "I couldn't match that model and agent combination. Please name one supported choice.";
+      if (!shouldAct()) return null;
       let created;
       try {
         created = await this.client.spawnSession({ projectPath: project.path,
@@ -81,15 +123,17 @@ export class OwnerRouter {
     const session = resolved.session;
     const name = session.tag || session.name || "that session";
     if (intent.kind === "status-one") {
-      const task = session.currentTask ? ` ${session.currentTask}` : "";
+      const task = session.currentTask ? ` Task: ${session.currentTask.slice(0, 140)}${session.currentTask.length > 140 ? "…" : ""}` : "";
       return `${name} is ${session.state}.${task}`;
     }
     if (intent.kind === "stop") {
+      if (!shouldAct()) return null;
       const result = await this.client.stopTurn(session.threadId, this.ownerId);
       this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
       return result.status === "stopped" ? `I stopped ${name}'s current turn.` : `${name} is already idle.`;
     }
     if (intent.kind === "close") {
+      if (!shouldAct()) return null;
       const result = await this.client.closeSession(session.threadId, this.ownerId);
       this.bound = null;
       return result.state === "pending" ? `${name} will close after its current turn.` : `I closed ${name}.`;
@@ -97,12 +141,14 @@ export class OwnerRouter {
     if (intent.kind === "runtime") {
       const choice = runtimeChoice(intent);
       if (!choice) return "I couldn't match that model and agent combination. Please name one supported choice.";
+      if (!shouldAct()) return null;
       await this.client.setRuntime(session.threadId, choice);
       this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
       return choice.model ? `${name} will use ${choice.model} on its next turn.` :
         `${name} will use Codex on its next turn.`;
     }
     if (intent.kind !== "message") return null;
+    if (!shouldAct()) return null;
     this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
     let receipt;
     try {

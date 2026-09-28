@@ -29,15 +29,17 @@ function setup() {
     }; },
     setRuntime: async (...args) => { calls.push(["runtime", ...args]); return { status: "set" }; },
     closeSession: async (...args) => { calls.push(["close", ...args]); return { state: "pending" }; },
+    searchSessions: async query => query === "login" ? [{ threadId: zoro.threadId,
+      name: "Login audit", link: `https://discord.com/channels/1546639912848199742/${zoro.threadId}` }] : [],
   };
   const router = new OwnerRouter({ client, ownerId, now: () => now });
-  return { router, calls, setRows: next => { rows = next; }, setNow: next => { now = next; } };
+  return { router, client, calls, setRows: next => { rows = next; }, setNow: next => { now = next; } };
 }
 
 test("reads current session facts and ignores another speaker", async () => {
   const { router, calls } = setup();
   assert.equal(await router.handle("Jester, what is Frankie doing?", { speakerId: ownerId }),
-    "franky is running. Checking login");
+    "franky is running. Task: Checking login");
   assert.equal(await router.handle("Who's running?", { speakerId: ownerId }), "Running: franky.");
   assert.equal(await router.handle("Tell Frankie to deploy", { speakerId: "someone else" }), null);
   assert.equal(calls.length, 0);
@@ -96,4 +98,38 @@ test("runtime change and close apply only to the named session", async () => {
   assert.deepEqual(calls[0], ["runtime", zoro.threadId, { backend: "claude", model: "sonnet" }]);
   assert.match(await router.handle("Close Zoro", { speakerId: ownerId }), /close after/);
   assert.deepEqual(calls[1], ["close", zoro.threadId, ownerId]);
+});
+
+test("history lookup uses EBI search and posts one exact thread link", async () => {
+  const { router } = setup();
+  const links = [];
+  router.postLink = async (...args) => links.push(args);
+  assert.match(await router.handle("Jester, find the session where we worked on login",
+    { speakerId: ownerId }), /Auto Transcripts/);
+  assert.deepEqual(links, [["Login audit",
+    `https://discord.com/channels/1546639912848199742/${zoro.threadId}`]]);
+});
+
+test("follow-on speech stores exact running source and destination IDs", async () => {
+  const { router, setRows } = setup();
+  const scheduled = [];
+  router.dependencies = { add: async item => scheduled.push(item) };
+  const sanji = { threadId: "1554149594718281869", tag: "sanji", name: "Sanji",
+    state: "history", closed: false };
+  setRows([{ ...zoro, state: "running" }, sanji]);
+  assert.match(await router.handle("When Zoro finishes, tell Sanji to run tests",
+    { speakerId: ownerId }), /When zoro finishes/);
+  assert.deepEqual(scheduled, [{ sourceId: zoro.threadId,
+    destinationId: sanji.threadId, task: "run tests" }]);
+});
+
+test("a just-listen or correction arriving during resolution cancels the pending action", async () => {
+  const { router, client, calls } = setup();
+  let allowed = true;
+  const original = client.resolveTag;
+  client.resolveTag = async name => { const result = await original(name); allowed = false; return result; };
+  assert.equal(await router.handle("Tell Frankie to deploy", {
+    speakerId: ownerId, shouldAct: () => allowed,
+  }), null);
+  assert.equal(calls.length, 0);
 });

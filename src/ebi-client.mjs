@@ -22,10 +22,11 @@ export class EbiClient {
   }
 
   async #request(path, options = {}) {
-    const headers = { Accept: "application/json", ...options.headers };
+    const { timeoutMs = this.timeoutMs, ...fetchOptions } = options;
+    const headers = { Accept: "application/json", ...fetchOptions.headers };
     if (this.secret) headers.Authorization = `Bearer ${this.secret}`;
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      ...options, headers, signal: AbortSignal.timeout(this.timeoutMs),
+      ...fetchOptions, headers, signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       const error = new Error(`EBI API returned ${response.status}`);
@@ -151,6 +152,35 @@ export class EbiClient {
     return this.#request(`/api/threads/${threadId}/close`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ actor: String(ownerId) }),
+    });
+  }
+
+  async turnUpdates({ since, after = "", limit = 100 }) {
+    if (typeof since !== "string" || Number.isNaN(Date.parse(since))) throw new Error("Invalid turn cursor");
+    const query = new URLSearchParams({ since, after, limit: String(limit) });
+    const result = await this.#request(`/api/jester/turns?${query}`);
+    if (!Array.isArray(result.turns) || typeof result.has_more !== "boolean") {
+      throw new Error("Invalid turn journal response");
+    }
+    for (const turn of result.turns) {
+      if (!THREAD_ID.test(turn.thread_id) || typeof turn.turn_key !== "string" ||
+          typeof turn.updated_at !== "string") throw new Error("Invalid turn journal entry");
+    }
+    return result;
+  }
+
+  async searchSessions(query) {
+    if (!query?.trim() || query.length > 200) throw new Error("Invalid history query");
+    const params = new URLSearchParams({ q: query.trim(), origin: "discord", limit: "10", body: "1" });
+    const result = await this.#request(`/api/search?${params}`, { timeoutMs: 10_000 });
+    if (!Array.isArray(result.results)) throw new Error("Invalid history results");
+    return result.results.map(row => {
+      if (typeof row.thread_id_str !== "string" || !THREAD_ID.test(row.thread_id_str)) {
+        throw new Error("History returned an unsafe thread ID");
+      }
+      return { threadId: row.thread_id_str, name: String(row.thread_name || ""),
+        project: String(row.working_dir || ""), lastUsed: String(row.last_used_at || ""),
+        snippet: String(row.snippet || ""), link: String(row.deep_link || "") };
     });
   }
 }

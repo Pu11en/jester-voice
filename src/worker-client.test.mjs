@@ -46,6 +46,27 @@ test("worker process restarts after a crash and never replays queued input", asy
   }
 });
 
+test("idle suspend releases speech worker and next audio starts fresh without a failure", async () => {
+  const children = [];
+  const worker = new WorkerClient({ command: "fake", spawnProcess() {
+    const child = fakeChild(); children.push(child); return child;
+  } });
+  let failures = 0;
+  worker.on("fatal", () => failures++);
+  try {
+    worker.send({ op: "audio", speaker: "owner", pcm: "first" });
+    await new Promise(resolve => setImmediate(resolve));
+    worker.suspend();
+    assert.equal(children[0].killed, true);
+    children[0].emit("exit", 0, null);
+    worker.send({ op: "audio", speaker: "owner", pcm: "second" });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(children.length, 2);
+    assert.match(children[1].lines[0], /second/);
+    assert.equal(failures, 0);
+  } finally { await worker.close(); }
+});
+
 test("worker bounds buffered audio and reset drops stale frames", async () => {
   const child = fakeChild({ blocked: true });
   const worker = new WorkerClient({ command: "fake", maxQueuedBytes: 180, spawnProcess: () => child });

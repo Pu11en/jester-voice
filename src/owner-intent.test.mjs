@@ -16,6 +16,10 @@ test("finds read-only status requests without treating a passing name as an acti
   assert.deepEqual(parseOwnerIntent("Start a session in jester-voice with Claude Sonnet to check tests"),
     { kind: "create", project: "jester-voice", runtime: "Claude", model: "Sonnet",
       instruction: "check tests" });
+  assert.deepEqual(parseOwnerIntent("Jester, find the session where we worked on login"),
+    { kind: "history", query: "login" });
+  assert.deepEqual(parseOwnerIntent("When Zoro finishes, tell Sanji to run tests"),
+    { kind: "dependency", source: "Zoro", target: "Sanji", instruction: "run tests" });
 });
 
 test("final direct address and corrected destination yield one task draft", () => {

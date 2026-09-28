@@ -10,6 +10,8 @@ import { createVoice } from "./voice.mjs";
 import { WorkerClient } from "./worker-client.mjs";
 import { EbiClient } from "./ebi-client.mjs";
 import { OwnerRouter } from "./owner-router.mjs";
+import { EventWatcher } from "./event-watcher.mjs";
+import { Dependencies } from "./dependencies.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -19,6 +21,8 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   createTranscriptImpl = (options) => new RoomTranscript(options),
   createPresenceImpl = (options) => new Presence(options),
   createConversationImpl = (options) => new Conversation(options),
+  createEventWatcherImpl = (options) => new EventWatcher(options),
+  createDependenciesImpl = (options) => new Dependencies(options),
 } = {}) {
   config ||= await loadConfig();
   const stallClip = await readFile(resolve(projectRoot, "assets/thinking.pcm"));
@@ -33,25 +37,51 @@ export async function startApp({ config, createVoiceImpl = createVoice,
     worker.send({ op: "audio", speaker, pcm: pcm.toString("base64") });
   } });
   const brain = createBrainImpl({});
+  const ebiClient = new EbiClient({ baseUrl: config.ebiApiUrl, secret: config.ebiApiSecret });
+  const dependencies = createDependenciesImpl({ client: ebiClient, ownerId: config.ownerId });
   const ownerRouter = new OwnerRouter({
-    client: new EbiClient({ baseUrl: config.ebiApiUrl, secret: config.ebiApiSecret }),
+    client: ebiClient,
     ownerId: config.ownerId,
+    dependencies,
+    postLink: async (name, link) => {
+      const channel = voice.client.channels?.cache?.get(config.transcriptChannelId) ||
+        await voice.client.channels?.fetch?.(config.transcriptChannelId);
+      if (!channel?.send) throw new Error("Auto Transcripts is unavailable");
+      await channel.send({ content: `Jester found: ${name.slice(0, 80)}\n${link}` });
+    },
   });
   const transcript = createTranscriptImpl({ client: voice.client, channelId: config.transcriptChannelId });
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
   const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId,
     presence, transcript, stallClip, unavailableClip, ownerRouter });
+  const eventWatcher = createEventWatcherImpl({ client: ebiClient, conversation, presence,
+    dependencies });
+  let idleTimer = null;
+  const scheduleIdleRelease = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { worker.suspend?.(); }, 5 * 60_000);
+    idleTimer.unref?.();
+  };
+  const onPresenceReset = (reason) => {
+    clearTimeout(idleTimer);
+    if (reason === "owner_departed" || reason === "owner_leave") scheduleIdleRelease();
+    else void worker.start().catch(error => console.warn("[jester] speech wake:", error.message));
+  };
+  presence.on?.("reset", onPresenceReset);
 
   let started = false;
   let closing = null;
   return {
-    worker, voice, brain, presence, conversation, transcript,
+    worker, voice, brain, presence, conversation, transcript, eventWatcher, dependencies,
     async start() {
       if (started) return;
       await worker.start();
       conversation.start();
       try {
         await presence.start();
+        if (!presence.inPresence) scheduleIdleRelease();
+        await dependencies.start();
+        await eventWatcher.start();
         started = true;
       } catch (error) {
         await this.close();
@@ -62,7 +92,11 @@ export async function startApp({ config, createVoiceImpl = createVoice,
       if (closing) return closing;
       closing = (async () => {
         const errors = [];
+        clearTimeout(idleTimer);
+        presence.off?.("reset", onPresenceReset);
         for (const close of [
+          () => eventWatcher.close(),
+          () => dependencies.close(),
           () => presence.stop(),
           () => conversation.close(),
           () => brain.close(),

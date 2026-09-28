@@ -194,6 +194,22 @@ export class WorkerClient extends EventEmitter {
     failed?.kill();
   }
 
+  /** Release speech models after a long empty-room interval; send restarts lazily. */
+  suspend() {
+    const child = this.child;
+    this.child = null;
+    this.queue = [];
+    this.queuedBytes = 0;
+    for (const timer of this.sayTimers.values()) clearTimeout(timer);
+    this.sayTimers.clear();
+    clearInterval(this.heartbeatTimer);
+    clearTimeout(this.heartbeatDeadline);
+    this.heartbeatTimer = null;
+    this.heartbeatDeadline = null;
+    this.heartbeatPending = null;
+    child?.kill();
+  }
+
   async close() {
     this.closed = true;
     this.#fail(new Error("Worker closed"));

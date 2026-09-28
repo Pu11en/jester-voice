@@ -84,3 +84,13 @@ test("a lost spawn response resolves its correlation without creating another th
   assert.match(calls[1].url, /jester-spawn-1$/);
   assert.equal(JSON.parse(calls[0].body).model, undefined);
 });
+
+test("history accepts only exact string IDs, never rounded JSON numbers", async () => {
+  const client = new EbiClient({ fetchImpl: async () => ({ ok: true,
+    json: async () => ({ results: [{ thread_id: 1554145503506333736, thread_id_str: "1554145503506333736",
+      thread_name: "Login audit", deep_link: "https://discord.com/channels/guild/thread" }] }) }) });
+  assert.equal((await client.searchSessions("login"))[0].threadId, "1554145503506333736");
+  const unsafe = new EbiClient({ fetchImpl: async () => ({ ok: true,
+    json: async () => ({ results: [{ thread_id: 1554145503506333736 }] }) }) });
+  await assert.rejects(unsafe.searchSessions("login"), /unsafe thread ID/);
+});
