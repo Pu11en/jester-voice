@@ -25,7 +25,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - Create `src/config.mjs` (loads both env files, validates, never logs secrets), `worker/__init__.py`, `worker/tests/`, and `.env.example` with the variables above.
   - `scripts/check.sh`: `cd` to the repo, `npm ci --silent` if `node_modules` is missing, then `npm test --silent`, then `$JESTER_PYTHON -m pytest -q worker/tests` (install `pytest` into that venv if it's missing). It must pass in under 2 minutes, with one trivial test on each side.
   - Add `node_modules/` to `.gitignore` if it's missing.
-- [ ] **2. Speech worker: listening.**
+- [x] **2. Speech worker: listening.**
   - `worker/speech.py` reads JSON lines on stdin: `{"op":"audio","speaker":id,"pcm":b64}` (16 kHz mono s16, 32 ms frames) and `{"op":"reset","speaker":id}`.
   - Per speaker it runs Silero VAD (`$JESTER_MODELS_DIR/silero_vad.onnx`, 32 ms frames) and emits `speech_start`, then `pause` after 200 ms of silence.
   - At each pause it runs Smart Turn v3.2 GPU (**pad at the start**, keep the last 8 s) and Parakeet v2 GPU on the utterance. It emits `{"ev":"pause","speaker","prob","text"}`.
