@@ -22,6 +22,8 @@ The owner also wants an explicit **transcript-only mode**: `Jester, just listen`
 
 **Computer-work boundary (owner choice A, 2026-09-28):** Jester is the voice interface and deterministic action gate. EBI sessions perform project file, app, browser, shell, and other computer work requested through Jester, just as they would for a typed task. Jester may use narrow, authorized, read-only EBI status/history calls and persist its own transcript/operational state. Luna receives no general computer tool. A spoken work request should be routed to the exact session and reported from real EBI receipts/state, without imposing a new typed-confirmation rule on clear owner instructions.
 
+**Spoken task text (owner choice A, 2026-09-28):** when Drew finishes a task request, Jester sends one clean, faithful prompt to the chosen EBI session. It removes filler, repeated starts, and superseded corrections, but preserves concrete names, paths, constraints, and Drew's final intent. It adds no new goals or permissions. Send automatically when the destination and request are clear; do not require a readback or approval on every task. If the target or a consequential instruction is genuinely ambiguous, ask one short spoken clarification before sending. Keep the recognized speech in the room transcript and show the final task in the destination thread so Drew can see what was sent. A request to read back or revise the draft is honored when Drew asks for it.
+
 ## Mission
 
 Build a separate Discord voice bot/service called Jester that lets the owner operate and navigate the existing EBI/ccdb agent environment almost entirely by natural spoken conversation.

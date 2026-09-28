@@ -21,7 +21,7 @@
 - ⚠️ A new session can start with your task, but today's EBI API cannot set its requested AI model in the same step. If you ask for a specific model, Jester must set it before that first task starts or explain the limitation.
 - ⚠️ Today's EBI API cannot reliably report every failure or stop a turn cleanly, and it does not yet enforce guest grants. Those are build tasks, alongside exact tag matching and safe recovery after a restart.
 
-## The next behavior to settle
+## How Jester will phrase your task
 
-- ⏳ **What exact words should Zoro receive?** My recommendation is that Jester turns your speech into one clean, faithful prompt: keep your details and final corrections, drop filler, add no new goals, and send it when your intent and target are clear.
-- ⏳ Your exact recognized speech still belongs in the room transcript, so you can see what was heard. You can ask Jester to read back or revise a task when you want; the recommended default avoids a readback ritual for every request.
+- ✅ **You chose one clean, faithful prompt.** Jester keeps your details and final corrections, drops filler, adds no new goals, and sends it when your intent and target are clear.
+- ✅ Your recognized speech remains in the room transcript, and the final task appears in the destination session. You can ask Jester to read back or revise a task when you want; it does not make you approve every routine prompt.

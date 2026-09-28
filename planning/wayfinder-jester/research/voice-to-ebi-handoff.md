@@ -24,6 +24,6 @@
 - The current EBI surface has no push completion/failure feed or pure stop-turn endpoint. The plan already includes exact stop and bounded event detection; Jester must distinguish accepted, running, finished, failed, and unknown states.
 - The live EBI API currently relies on local network guards if its bearer secret is unset; several privileged routes do not independently verify the real guest actor. The planned EBI changes must enforce scoped grants at the side-effecting boundary before guest work is enabled.
 
-## Open behavior decision
+## Spoken task wording decided
 
-How much may Jester rewrite Drew's spoken assignment before giving it to EBI? The recommended behavior is one clean, faithful prompt that removes filler and corrected words but preserves all requested details and sends automatically when the target is clear. The alternative is near-verbatim text or a required draft/readback step. Resolve this before finalizing prompt delivery checks in the overnight manifest.
+Drew chose one clean, faithful prompt: remove filler and superseded corrections, preserve all requested details and final intent, add no new goals, and send automatically when the target is clear. A readback is available on request rather than required for every task. The room transcript keeps the recognized words; the destination thread shows the actual outbound task. Test this with self-corrections, named files/paths, a vague target, and an explicit request to read back before finalizing the overnight manifest.
