@@ -26,13 +26,23 @@
 - [Replace the old bot](../REPLACES_OLD_VOICE.md): Jester takes over transcripts in the exact `allwork` format and reuses the EBI bot token. It auto-joins with the owner and leaves on "Jester, leave".
 
 - [How can Jester detect EBI session finish/failure with today's API?](wayfinder-jester/tickets/ebi-event-detection-today.md): read ccdb `sessions.db` read-only every 1 s, plus `/api/sessions` every 15 s. Failure is detectable but only heuristically.
+- [Phase 1 voice loop](wayfinder-jester/tickets/build-phase1-voice-loop.md): locally built and running as a user service. It hears and answers Drew, supports barge-in, and writes allwork-compatible transcript files. Its live feel bar has not passed.
+- [Old voice service](wayfinder-jester/tickets/retire-old-voice-bot.md): stopped, disabled and archived on 2026-09-28; the main EBI bot stays up. The transcript channel post, privacy Pause, retention and voice EBI controls still need replacement.
 
-## Not yet specified
+## Current frontier
 
-- **Phase 2, Jester Control plan:** the typed actions (status, message by tag, spawn, close, model/backend switch, history search) and the permission/grant store. Waits on the feel test, the EBI-changes decision and the event research.
-- **Guests:** conversation rules, temporary grants and whether grants survive a crash.
-- **Proactive events:** how updates are worded, when to speak up versus wait for a gap, and catch-up after the owner has been away.
-- **Crash recovery and deploy:** systemd user unit vs Docker, what state to persist, reconnects, idle sleep.
+- [Full remaining-work plan](../PLAN-jester-completion.md): 27 small outcomes across voice/parity, safe EBI control, events and long-run behavior. Repository-specific `/gowork` child plans are needed before dispatch.
+- [Owner feel test](wayfinder-jester/tickets/feel-test-phase1.md): open. Eight completed live turns measured about 2.8 s median to first audio, above the ~1.5 s handoff target; a 10–15 minute owner check is still required before EBI control.
+- [Allwork trigger decision](wayfinder-jester/tickets/allwork-trigger-at-cutover.md): open. The installed trigger still matches “Jester”; the idea-saving feature was later canceled, so the shelved Goku patch must not be activated without choosing its remaining role.
+- [EBI interface decision](wayfinder-jester/tickets/may-jester-change-ebi.md): open. Full guest authorization and pure stop need small local EBI API changes and separate tests.
+- **Next build frontier:** restore natural streaming, privacy and transcript parity first; then the owner feel test; then EBI actions/events.
+- **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
+
+## Already implemented infrastructure
+
+- The Jester user service is enabled, crash-restarts and joins the configured Discord room. The old service is archived, so no second Discord application or token is needed.
+- Local STT, turn detection, TTS and Codex app-server brain are integrated; offline checks run with `bash scripts/check.sh`.
+- The complete product and remaining gaps are captured in the full plan; a live feel test and two owner decisions remain genuine gates to an unattended end-to-end rollout.
 - **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
 
 ## Out of scope

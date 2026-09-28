@@ -1,0 +1,72 @@
+# Finish Jester Voice — full review and build plan
+
+Check: bash scripts/check.sh
+Try: systemctl --user start jester-voice.service
+Open: Drew's configured Discord voice room; Jester joins when Drew does.
+
+Goal: Jester replaces the old voice service without losing its useful transcript features, lets Drew and permitted guests converse naturally, controls the right EBI sessions safely, reports meaningful agent events, and survives long sessions and restarts. This is the **master plan**. Before using `/gowork`, split it into repository-scoped runs for Jester, EBI, and allwork so each runs on its own safe copy and its own check.
+
+## What the review found
+
+- ✅ **Working now:** Jester joins with Drew, hears and answers him, supports spoken interruption and leave/join controls, loads Parakeet/Smart Turn/Kokoro/Luna, and writes per-room transcript files. The old voice service is archived; the main EBI bot still runs. A real Jester transcript was checked against allwork's own parser: 29 of 29 recent speech lines parsed.
+- ⏳ **The voice still needs its feel test:** eight completed live replies have a median end-of-speech-to-first-audio time of about **2.8 seconds**, including one 10.2-second stall; the handoff target is about 1.5 seconds or less for ordinary turns. Drew has not yet completed the 10–15 minute natural-conversation check.
+- ⚠️ **Streaming is narrower than promised:** the brain yields sentences, but the conversation layer waits for the whole brain answer before sending any to Kokoro. The cached “mm, one sec” clip can also play while Drew is only pausing mid-thought. Both need correction before judging speed and turn-taking.
+- ⚠️ **The old replacement is incomplete:** transcript files work, but Jester does not update the Discord Auto Transcripts message, show a recording notice or Pause control, prune files after 30 days, or resolve allwork's still-live “Jester” idea trigger. The old voice service supplied those features before it was archived.
+- ⬜ **The larger Jester mission is still unbuilt:** guests cannot converse with Jester yet; there is no deterministic permission/grant layer, Zoro/Nami status or control, new-session creation, history lookup, proactive event delivery, or simple “when this finishes” dependencies.
+- ⚠️ **EBI has real interface limits:** its `/spoken` endpoint only accepts Drew, `/api/sessions` can reassign tags while being read, and it has no push event feed or pure stop-turn endpoint. A safe full guest-control experience needs small, tested EBI changes; Jester must never impersonate Drew for a guest.
+
+The Phase 1 plan deliberately stopped at talking in Discord because `HANDOFF.md` requires a feel test before EBI control. Calling that partial build “Jester done” and retiring the old feature before restoring its privacy/channel behavior was my mistake. This plan closes that gap.
+
+## First: make voice and transcripts complete
+
+Each checkbox is one small outcome, intended for one fresh build session of about 15–30 minutes. Automated checks use fakes and local fixtures; they never make a paid model call, enter Discord voice, or touch a live EBI session.
+
+- [ ] **1. Stream speech after Drew finishes a turn.** Keep speculative output silent until turn end, then send each completed Luna sentence to Kokoro as it arrives; cancel a stale sentence on correction or interruption. A fake slow brain must prove the first sentence plays before the final sentence exists. Repo: Jester.
+- [ ] **2. Keep the stall cue out of Drew's pauses.** Play the cached cue only after an accepted turn has waited 2.5 seconds for a word; never play it during a tentative pause, after barge-in, or twice for one turn. Repo: Jester.
+- [ ] **3. Handle an unavailable brain aloud.** If Codex login, quota, or app-server fails, tell Drew briefly with a local cached voice clip and keep deterministic leave/privacy controls available; do not silently switch to a paid API or another model. Repo: Jester.
+- [ ] **4. Add conversational attention.** Follow up naturally without a wake word during an active exchange, respond when clearly addressed, and avoid answering ambient room talk as though it were a request. Prefer Drew when voices overlap. Test with mixed owner/guest events. Repo: Jester.
+- [ ] **5. Let guests have ordinary conversations.** A guest who addresses Jester can talk and interrupt its reply, while private EBI facts and all control actions remain blocked in code; no model text can grant itself permission. Repo: Jester.
+- [ ] **6. Restore the transcript-channel post.** Create one attached Markdown transcript message per room session in Auto Transcripts and update that same message as turns arrive, with bounded update frequency and retry after a transient Discord failure. Keep the current allwork-compatible file. Repo: Jester.
+- [ ] **7. Restore recording privacy controls.** Show a clear room notice with Pause; anyone in the room can pause audio capture/transcription, only Drew can resume, and paused audio is never sent to STT or Luna or saved. Test both Discord identity and restart behavior. Repo: Jester.
+- [ ] **8. Restore the 30-day transcript cleanup.** Prune only aged transcript files after checking the path and leave current sessions untouched; test with dated fixtures. Repo: Jester.
+- [ ] **9. Resolve allwork's trigger collision.** The installed allwork code still treats “Jester” as an idea trigger. After Drew chooses, activate the already-built Goku rename or disable that trigger; do not revive the canceled idea-saving feature. Check the installed skill copy and existing transcript parser. Repo: allwork, in its own safe copy.
+- [ ] **10. Run the owner feel and load check.** Drew talks naturally for 10–15 minutes, including pauses, corrections, barge-in and concurrent EBI work. Record real receive errors, CPU/VRAM and turn times; turn each failure into a small fix task. This is a human quality gate, not an automatic test.
+
+## Then: give Jester safe EBI control
+
+Start this section after the voice feel check; otherwise action debugging will be mixed with speech problems. EBI changes stay local and are tested in an EBI safe copy before any live bot restart.
+
+- [ ] **11. Build an ID-safe EBI client.** Read real session state without losing Discord's long thread IDs in JavaScript; apply timeouts and one request in flight. Resolve a current tag and its spoken aliases to the canonical thread ID, then keep that ID for the conversation. Repo: Jester.
+- [ ] **12. Add read-only status questions.** “What is Zoro doing?” and “Who's running?” must query current EBI state and answer from facts, never Luna memory. Unknown or reused tags prompt a short clarification. Repo: Jester.
+- [ ] **13. Add typed intent and policy checks.** Luna may interpret a spoken request into a small validated action schema, but deterministic code checks actor, exact target, action and risk before execution. Partial corrections such as “deploy—actually just test” must not trigger early actions; arbitrary shell from generated text is forbidden. Repo: Jester.
+- [ ] **14. Message the right session.** “Tell Zoro…” sends the final text through EBI's `/spoken` path with Drew's true identity, the exact resolved thread ID and queue/interrupt semantics. Confirm the result aloud; duplicate delivery after a retry is prevented. Repo: Jester.
+- [ ] **15. Create sessions from speech.** Resolve a named project through the project catalog, create one thread with a correlation ID, and return its real name/tag; a retry must not create a duplicate. Repo: Jester.
+- [ ] **16. Add close and model/backend changes.** Apply each only to a resolved thread through the existing EBI APIs, and clarify broad requests such as “stop everything.” Explain unsupported folder moves until EBI provides them. Repo: Jester.
+- [ ] **17. Add a pure stop-turn endpoint.** Add a narrowly scoped EBI endpoint that stops one exact active turn without sending a new prompt; verify it cannot stop another session or all sessions by accident. Repo: EBI.
+- [ ] **18. Wire spoken stop to the exact turn.** Resolve the target ID and call the checked stop endpoint; acknowledge when the target is already idle. Repo: Jester.
+- [ ] **19. Add a read-only tag/status endpoint to EBI.** Remove Jester's need to trigger tag reassignment or Discord renames just to answer a status question; keep the old API behavior for existing callers. Repo: EBI.
+- [ ] **20. Add guest authorization at EBI's boundary.** Accept the real guest identity and a narrowly scoped Jester grant, and reject a guest without that grant instead of treating them as Drew. Test forged identities, expired grants and wrong-session actions. Repo: EBI.
+- [ ] **21. Add temporary grants in Jester.** Only Drew can grant, revoke or make access permanent; default grants expire with the voice session and cover the named person, capability and session. Guests cannot re-delegate. Repo: Jester.
+
+## Finally: memory, events and long-run behavior
+
+- [ ] **22. Resolve conversational references.** “Tell him that too” binds to the last canonical thread ID, not a reusable Zoro/Nami tag. Search EBI history for past work by topic/time/project and ask when a match is genuinely ambiguous. Repo: Jester.
+- [ ] **23. Detect EBI events without brain polling.** Use the researched read-only SQLite turn journal for starts, finishes and likely failures; reconcile tags/running state through a bounded EBI API call. Handle schema drift, stale rows and restarts without making false announcements. Repo: Jester; use EBI events instead if the approved local EBI endpoint exists.
+- [ ] **24. Deliver events at the right moment.** Hold normal completions for a conversational gap, speak blockers/failures promptly, bundle routine updates, and persist meaningful missed events for one catch-up when Drew returns. Repo: Jester.
+- [ ] **25. Support simple requested dependencies.** “When Zoro finishes, tell Sanji to start” and “when both finish, tell me what I can test” store exact IDs and one-time actions, survive a restart, and do not launch twice or act on failed/ambiguous results. Repo: Jester.
+- [ ] **26. Shed idle load and report degradation.** When the room is empty, stop needless STT/TTS compute and release model resources where safe; wake without making Drew wait unreasonably. Report Codex capacity or local overload plainly without silently throttling EBI workers. Repo: Jester.
+- [ ] **27. Finish the replacement check.** Verify owner/guest permissions, privacy Pause, edited transcript post, allwork parse, transcript retention, EBI actions, event recovery, 10–15 minutes of natural voice and restart behavior. Keep the old archive and rollback steps. No GitHub push until Drew has used it and says it is good.
+
+## Decisions, timing and how to try it
+
+- **Decision 1 — EBI changes:** the full guest-control and pure-stop behavior requires small EBI API changes. The safe recommendation is to allow local, tested changes, with the main EBI bot restarted only after its own checks pass. Without them, build owner-only control and report the guest limitation clearly.
+- **Decision 2 — allwork trigger:** the safest recommendation is the already-built Goku rename for allwork, keeping “Jester” for the bot; the later cancellation of idea saving means no new idea-saving feature is built. This stays a decision until Drew chooses.
+- **Quality gate:** tasks 1–8 can be built unattended; task 9 follows Drew's allwork trigger choice. Drew's 10–15 minute feel test is still required before tasks 11–27 according to the handoff; a live voice quality judgment cannot be faked by an automated check. The 2.8-second measured median means tuning may be needed before the gate passes.
+- **Time:** 27 small outcomes imply roughly **12–20 hours of build and checking**, possibly split over more than one overnight run, plus Drew's two short decisions and the feel check. This is an estimate from task count and current code, not a promise that all 27 can finish in one night.
+- **Automation:** if Drew chooses `/gowork`, make repo-scoped child plans with `bash scripts/check.sh` for Jester and focused offline checks for EBI/allwork, then dispatch them in dependency order. A normal session can do the same work one task at a time. Do not let a Jester safe copy directly edit the live EBI or allwork checkout.
+
+## How to try it
+
+1. **Voice:** talk naturally for 10–15 minutes, pause mid-thought, then interrupt a reply; Jester should wait, answer promptly and stop speaking when interrupted.
+2. **Shared room and transcript:** have another person ask a harmless question, pause/resume recording, then check that the Auto Transcripts message and the saved file contain only permitted speech.
+3. **EBI control:** ask what Zoro is doing, send him a message, create a session, and ask for a completion update; Jester should name the correct session and never guess a private or ambiguous action.
