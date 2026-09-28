@@ -44,3 +44,28 @@ test("snapshot shares one request in flight and reads again for a later action",
   assert.equal(calls, 2);
   assert.throws(() => new EbiClient({ baseUrl: "https://example.com" }), /local API/);
 });
+
+test("a lost POST response reconciles the same request ID without posting twice", async () => {
+  const calls = [];
+  const client = new EbiClient({ fetchImpl: async (url, options) => {
+    calls.push({ url, method: options.method || "GET" });
+    if (options.method === "POST") throw new Error("response lost");
+    return { ok: true, json: async () => ({ status: "posted", request_id: "jester-test-1" }) };
+  } });
+  const result = await client.sendSpoken({ threadId: "1553899450227757156",
+    speakerId: "488763953397235712", text: "check login", requestId: "jester-test-1" });
+  assert.equal(result.status, "posted");
+  assert.deepEqual(calls.map(c => c.method), ["POST", "GET"]);
+});
+
+test("unknown delivery never retries a spoken POST", async () => {
+  let posts = 0;
+  const client = new EbiClient({ fetchImpl: async (_url, options) => {
+    if (options.method === "POST") posts++;
+    throw new Error("offline");
+  } });
+  await assert.rejects(client.sendSpoken({ threadId: "1553899450227757156",
+    speakerId: "488763953397235712", text: "check login", requestId: "jester-test-2" }),
+  /Delivery uncertain/);
+  assert.equal(posts, 1);
+});

@@ -4,6 +4,7 @@ import { PassThrough } from "node:stream";
 import { performance } from "node:perf_hooks";
 import { appendBounded } from "./bounded-log.mjs";
 import { Attention, modeCommand, possibleModeCommand } from "./attention.mjs";
+import { parseOwnerIntent } from "./owner-intent.mjs";
 
 const MAX_PENDING_TTS_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_LOG_BYTES = 10 * 1024 * 1024;
@@ -37,7 +38,7 @@ function mergeText(first, second) {
  */
 export class Conversation {
   constructor({ worker, brain, voice, ownerId, presence = null, transcript = null, stallClip = null,
-    unavailableClip = null,
+    unavailableClip = null, ownerRouter = null,
     logFile = "logs/turns.jsonl", now = () => performance.now(), logger = console } = {}) {
     if (!worker || !brain || !voice || !ownerId) throw new Error("worker, brain, voice, and ownerId are required");
     this.worker = worker;
@@ -48,6 +49,7 @@ export class Conversation {
     this.transcript = transcript;
     this.stallClip = stallClip;
     this.unavailableClip = unavailableClip;
+    this.ownerRouter = ownerRouter;
     this.logFile = logFile;
     this.now = now;
     this.attention = new Attention(now);
@@ -97,6 +99,8 @@ export class Conversation {
     if (this.started) return;
     this.started = true;
     this.attention.reset();
+    this.ownerRouter?.reset();
+    void this.#refreshSessionTags();
     this.mode = "conversation";
     this.worker.on("event", this.onEvent);
     this.worker.on("fatal", this.onWorkerFatal);
@@ -112,6 +116,7 @@ export class Conversation {
     if (!this.started) return;
     this.started = false;
     this.attention.reset();
+    this.ownerRouter?.reset();
     this.mode = "conversation";
     this.ownerSpeechVersion += 1;
     this.worker.off("event", this.onEvent);
@@ -195,6 +200,7 @@ export class Conversation {
     const speechVersion = this.ownerSpeechVersion;
     if (await this.presence?.handleOwnerTurn(event.text)) {
       this.attention.reset();
+      this.ownerRouter?.reset();
       await this.#abortDraft();
       return;
     }
@@ -204,6 +210,7 @@ export class Conversation {
       this.mode = requestedMode;
       this.transcript?.setMode?.(requestedMode);
       this.attention.reset();
+      this.ownerRouter?.reset();
       if (this.reply) this.#stopReply();
       this.#stopLocalClip();
       await this.#abortDraft();
@@ -215,7 +222,14 @@ export class Conversation {
     }
     // Classify the final utterance itself: carried draft words must not hide an
     // ending/side address or reuse an old wake name after the window expires.
+    const wasEngaged = this.attention.engaged;
+    if (this.attention.classify(event.text) === "ambient" && wasEngaged &&
+      /^[\p{L}][\p{L}'-]*\s*[,;:—–-]/u.test(event.text.trim())) {
+      await this.#refreshSessionTags();
+      if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
+    }
     if (!this.attention.accept(event.text)) {
+      if (!this.attention.engaged) this.ownerRouter?.reset();
       if (this.reply) this.#stopReply();
       this.#stopLocalClip();
       await this.#abortDraft();
@@ -224,6 +238,27 @@ export class Conversation {
     const text = this.turn?.resumed
       ? mergeText(this.turn.carriedText || this.turn.pauseText, event.text)
       : event.text.trim();
+    if (this.ownerRouter && parseOwnerIntent(text)) {
+      await this.#abortDraft();
+      const intent = parseOwnerIntent(text);
+      if (intent?.kind === "message" || intent?.kind === "stop") {
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+      if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
+      let response;
+      try {
+        response = await this.ownerRouter.handle(text, {
+          speakerId: this.ownerId, allowReference: wasEngaged,
+        });
+      } catch (error) {
+        this.logger.warn?.("[conversation] owner route:", error.message);
+        response = "I can't reach the session list right now. Please try again.";
+      }
+      if (response && this.started && speechVersion === this.ownerSpeechVersion) {
+        this.#speakControl(response, event);
+      }
+      return;
+    }
     if (this.turn && !this.turn.resumed && !this.turn.accepted) {
       this.turn.accepted = true;
       this.turn.finalText = text;
@@ -317,6 +352,17 @@ export class Conversation {
     };
     this.worker.send({ op: "say", id, text });
     this.voice.play(id, stream);
+  }
+
+  #speakControl(text, event) {
+    const turn = {
+      accepted: true, draftDone: true, endAt: this.now(),
+      sttMs: event.ms?.stt ?? null, utteranceMs: event.ms?.utterance ?? null,
+      brainFirstWordAt: this.now(),
+    };
+    this.turn = turn;
+    this.#speak(text, turn);
+    this.reply.brainDone = true;
   }
 
   #audioOut(event) {
@@ -427,6 +473,7 @@ export class Conversation {
 
   #voiceDisconnected() {
     this.attention.reset();
+    this.ownerRouter?.reset();
     this.ownerSpeechVersion += 1;
     this.#stopLocalClip();
     this.#cancelThinking();
@@ -441,6 +488,12 @@ export class Conversation {
     this.interrupting = Promise.resolve(this.brain.interrupt()).catch((error) => {
       this.logger.warn?.(`[conversation] ${label}:`, error.message);
     });
+  }
+
+  async #refreshSessionTags() {
+    if (!this.ownerRouter) return;
+    try { this.attention.setSessionTags(await this.ownerRouter.sessionTags()); }
+    catch (error) { this.logger.warn?.("[conversation] session tags:", error.message); }
   }
 
   #scheduleThinking(turn) {

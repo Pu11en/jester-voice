@@ -8,6 +8,8 @@ import { Presence } from "./presence.mjs";
 import { RoomTranscript } from "./transcript.mjs";
 import { createVoice } from "./voice.mjs";
 import { WorkerClient } from "./worker-client.mjs";
+import { EbiClient } from "./ebi-client.mjs";
+import { OwnerRouter } from "./owner-router.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -31,9 +33,14 @@ export async function startApp({ config, createVoiceImpl = createVoice,
     worker.send({ op: "audio", speaker, pcm: pcm.toString("base64") });
   } });
   const brain = createBrainImpl({});
+  const ownerRouter = new OwnerRouter({
+    client: new EbiClient({ baseUrl: config.ebiApiUrl, secret: config.ebiApiSecret }),
+    ownerId: config.ownerId,
+  });
   const transcript = createTranscriptImpl({ client: voice.client, channelId: config.transcriptChannelId });
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
-  const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId, presence, transcript, stallClip, unavailableClip });
+  const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId,
+    presence, transcript, stallClip, unavailableClip, ownerRouter });
 
   let started = false;
   let closing = null;

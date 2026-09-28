@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 const THREAD_ID = /^\d{17,20}$/;
 const ALIASES = new Map([["frankie", "franky"]]);
 
@@ -25,7 +27,11 @@ export class EbiClient {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...options, headers, signal: AbortSignal.timeout(this.timeoutMs),
     });
-    if (!response.ok) throw new Error(`EBI API returned ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`EBI API returned ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
     return response.json();
   }
 
@@ -47,6 +53,7 @@ export class EbiClient {
           aliases: Array.isArray(raw.aliases) ? raw.aliases.map(normalizeTag) : [],
           name: String(raw.name || ""),
           project: String(raw.project || ""),
+          currentTask: String(raw.current_task || ""),
           state: String(raw.state || "history"),
           closed: raw.closed === true,
         };
@@ -66,5 +73,35 @@ export class EbiClient {
     if (!matches.length) return { kind: "unknown" };
     if (matches.length !== 1) return { kind: "ambiguous", matches };
     return { kind: "found", session: matches[0] };
+  }
+
+  async sendSpoken({ threadId, text, speakerId, mode = "queue", requestId = randomUUID() }) {
+    if (!THREAD_ID.test(threadId) || !THREAD_ID.test(String(speakerId))) throw new Error("Invalid owner or target ID");
+    if (!text?.trim() || text.length > 24_000) throw new Error("Spoken assignment is empty or too long");
+    const path = `/api/threads/${threadId}/spoken`;
+    const payload = { text, speaker_id: String(speakerId), mode, source: "voice", request_id: requestId };
+    try {
+      await this.#request(path, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      // A timeout may happen after EBI accepted the request. Never POST again.
+      try { return await this.spokenReceipt(threadId, requestId); }
+      catch { throw new Error(`Delivery uncertain for request ${requestId}`, { cause: error }); }
+    }
+    return this.spokenReceipt(threadId, requestId);
+  }
+
+  async spokenReceipt(threadId, requestId) {
+    if (!THREAD_ID.test(threadId) || !/^[\w-]{8,100}$/.test(requestId)) throw new Error("Invalid receipt identity");
+    return this.#request(`/api/threads/${threadId}/spoken/${encodeURIComponent(requestId)}`);
+  }
+
+  async stopTurn(threadId, speakerId) {
+    if (!THREAD_ID.test(threadId) || !THREAD_ID.test(String(speakerId))) throw new Error("Invalid owner or target ID");
+    return this.#request(`/api/threads/${threadId}/stop-turn`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speaker_id: String(speakerId) }),
+    });
   }
 }

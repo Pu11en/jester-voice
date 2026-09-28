@@ -6,6 +6,7 @@ test("finds read-only status requests without treating a passing name as an acti
   assert.deepEqual(parseOwnerIntent("Jester, what is Frankie doing?"), { kind: "status-one", target: "Frankie" });
   assert.deepEqual(parseOwnerIntent("Who's running?"), { kind: "status-all" });
   assert.equal(parseOwnerIntent("We talked about Frankie yesterday"), null);
+  assert.deepEqual(parseOwnerIntent("Jester, stop Zoro"), { kind: "stop", target: "Zoro" });
 });
 
 test("final direct address and corrected destination yield one task draft", () => {
@@ -20,4 +21,8 @@ test("final direct address and corrected destination yield one task draft", () =
   assert.deepEqual(parseOwnerIntent("Tell him to add tests"),
     { kind: "message", target: "him", instruction: "add tests" });
   assert.deepEqual(parseOwnerIntent("Tell Frankie"), { kind: "clarify", reason: "missing-task", target: "Frankie" });
+  assert.deepEqual(parseOwnerIntent("Tell Frankie to deploy—actually just test"),
+    { kind: "message", target: "Frankie", instruction: "just test" });
+  assert.deepEqual(parseOwnerIntent("Tell Frankie to work in A—actually in B"),
+    { kind: "clarify", reason: "task-correction", target: "Frankie" });
 });

@@ -44,6 +44,8 @@ export function readConfig(env) {
     transcriptChannelId: id(env.DISCORD_TRANSCRIPT_CHANNEL_ID ? "DISCORD_TRANSCRIPT_CHANNEL_ID" : "VOICE_TRANSCRIPT_CHANNEL_ID"),
     python: env.JESTER_PYTHON || "/home/drewp/main-projects/jester-voice/bench/.venv/bin/python",
     modelsDir: env.JESTER_MODELS_DIR || "/home/drewp/main-projects/jester-voice/bench/data/models",
+    ebiApiUrl: env.JESTER_EBI_API_URL || "http://127.0.0.1:9876",
+    ebiApiSecret: env.JESTER_EBI_API_SECRET || env.CCDB_API_SECRET || "",
   };
   if (config.voiceChannelId === config.transcriptChannelId) {
     throw new Error("Voice and transcript channels must be different");

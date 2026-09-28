@@ -56,7 +56,8 @@ function speechPcm(sample) {
 async function withConversation(options, fn) {
   const dir = await mkdtemp(join(tmpdir(), "jester-conversation-"));
   const parts = setup(options);
-  const conversation = new Conversation({ ...parts, now: options.now, ownerId: "owner", logFile: join(dir, "turns.jsonl") });
+  const conversation = new Conversation({ ...parts, now: options.now, ownerId: "owner",
+    ownerRouter: options.ownerRouter, logFile: join(dir, "turns.jsonl") });
   conversation.start();
   // Existing playback/timing tests exercise an already engaged exchange.
   // Attention regressions below use dormant: true and wake through worker events.
@@ -78,6 +79,25 @@ test("speculative answer stays silent, is discarded on resumed speech, and merge
     assert.equal(brain.asks[1], "Tell me about Luna please.");
     assert.deepEqual(worker.sent.filter((message) => message.op === "say").map((message) => message.text), ["Use the merged thought."]);
     assert.ok(brain.interrupts >= 1);
+  });
+});
+
+test("named owner task routes after final speech; transcript-only and guests do not dispatch", async () => {
+  const handled = [];
+  const ownerRouter = { reset() {}, sessionTags: async () => ["frankie"],
+    handle: async (...args) => { handled.push(args); return "I posted your task to Frankie."; } };
+  await withConversation({ ownerRouter, answers: ["Wrong Luna answer."] }, async ({ events, worker, brain }) => {
+    events("turn_end", { text: "And Frankie, fix the login", ms: { utterance: 900 } });
+    await waitUntil(() => handled.length === 1, "owner task route");
+    assert.equal(handled[0][0], "And Frankie, fix the login");
+    assert.equal(brain.asks.length, 0);
+    assert.deepEqual(worker.sent.filter(m => m.op === "say").map(m => m.text),
+      ["I posted your task to Frankie."]);
+    worker.emit("event", { ev: "turn_end", speaker: "guest", text: "Tell Frankie to deploy" });
+    events("turn_end", { text: "Jester just listen" });
+    events("turn_end", { text: "Jester, tell Frankie to deploy" });
+    await tick();
+    assert.equal(handled.length, 1);
   });
 });
 
