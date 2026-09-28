@@ -1,5 +1,9 @@
 # EBI Integration Surface — 2026-09-27
 
+## September 28 implementation update
+
+This file records the original inspection; several limits below have since changed. Jester now reads `GET /api/jester/sessions?limit=100`, a read-only string-ID snapshot; polls `GET /api/jester/turns`; checks durable spoken receipts at `GET /api/threads/{id}/spoken/{request_id}`; and uses `POST /api/threads/{id}/stop-turn`. `POST /api/spawn` now accepts explicit `empty:true`, `thread_name`, `backend`, and `model`, and Jester binds a correlation ID before it calls spawn. Empty creation was verified once against live EBI. EBI commit `48f67d5` changes single-thread spawn tagging to avoid taking a live tag, but still needs deployment and a repair of the original Zoro tag before voice routing is safe. The ten-word voice-tag pool is unchanged.
+
 Read-only inspection (START_HERE step 3). Relay: `~/main-projects/ebi-agent-chat-relay` @ 53fa8a7. Paths below are relative to `claude_discord/` unless noted. Routes are registered in `ext/api_server.py:482-553`.
 
 ## Control API (`http://127.0.0.1:9876`)

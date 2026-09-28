@@ -1,5 +1,7 @@
 # Jester owner-use readiness gates
 
+Progress after this original checklist is recorded in `sim/STATUS.md`; several gaps below have since been fixed or tested.
+
 September 28, 2026. Drew approved the conversation examples and asked to make Jester usable. This is the working checklist for discovering missing behavior. A green unit test is evidence only for the layer it exercises. Each gate needs a specific failed or passing observation before real project work starts.
 
 | Gate | Current evidence | Missing proof or defect | Next falsifiable check |

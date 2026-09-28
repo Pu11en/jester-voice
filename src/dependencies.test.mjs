@@ -115,6 +115,26 @@ test("group handoff waits for every source, dispatches once, and blocks on a fai
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("an old failure cannot block a newly scheduled group handoff", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const now = Date.parse("2026-09-28T12:00:00Z");
+  const secondId = "1554149594718281869";
+  try {
+    const deps = new Dependencies({ client: {}, ownerId, file: join(dir, "dependencies.json"),
+      now: () => now });
+    await deps.start();
+    await deps.addGroup({ sources: [{ threadId: sourceId, label: "zoro" },
+      { threadId: secondId, label: "sanji" }], destinationId, task: "check links" });
+    await deps.failed(sourceId, { terminal: true, updated_at: "2026-09-28T11:59:59Z" });
+    assert.equal(deps.items[0].status, "pending");
+    await deps.failed(sourceId, { terminal: true, updated_at: "invalid" });
+    assert.equal(deps.items[0].status, "pending");
+    await deps.failed(sourceId, { terminal: true, updated_at: "2026-09-28T12:00:01Z" });
+    assert.equal(deps.items[0].status, "blocked");
+    await deps.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("just-listen cancellation prevents a queued follow-on task", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
   const calls = [];

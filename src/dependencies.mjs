@@ -88,7 +88,8 @@ export class Dependencies {
       if (!["results", "group"].includes(item.kind) || item.status !== "pending" ||
           !item.sources.some(s => s.threadId === threadId) || item.completed[threadId]) continue;
       const eventAt = turn?.accepted_at || turn?.updated_at || new Date(this.now()).toISOString();
-      if (Date.parse(eventAt) < Date.parse(item.createdAt)) continue;
+      const eventTime = Date.parse(eventAt);
+      if (!Number.isFinite(eventTime) || eventTime <= Date.parse(item.createdAt)) continue;
       item.completed[threadId] = { status: "accepted", at: eventAt };
       if (Object.keys(item.completed).length === item.sources.length) {
         item.status = item.kind === "results" ? "ready" : "dispatching";
@@ -127,6 +128,9 @@ export class Dependencies {
       }
       if (item.kind === "group" && item.status === "pending" && turn?.terminal === true &&
           item.sources.some(s => s.threadId === threadId)) {
+        const eventAt = turn.updated_at;
+        const eventTime = Date.parse(eventAt);
+        if (!Number.isFinite(eventTime) || eventTime <= Date.parse(item.createdAt)) continue;
         item.status = "blocked";
         changed = true;
       }
