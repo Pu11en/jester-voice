@@ -32,11 +32,11 @@
 ## Current frontier
 
 - [Full remaining-work plan](../PLAN-jester-completion.md): 27 small outcomes across voice/parity, safe EBI control, events and long-run behavior. The overnight manifest below assigns its 26 automated outcomes to repository-specific work copies; Drew's feel test is the remaining human outcome.
-- [Overnight execution manifest](../PLAN-jester-overnight-manifest.md): 26 automated tasks across Jester, EBI and allwork in separate repository copies, with dependency checks and automatic local integration on success. One-shot scheduler task 31 starts it at 17:00 Chicago time on 2026-09-28; task 32 checks integration and safe local activation at 07:30 on 2026-09-29. The build queue posts an 08:00 summary.
+- [Overnight execution manifest](../PLAN-jester-overnight-manifest.md): 26 automated tasks across Jester, EBI and allwork in separate repository copies, with dependency checks and automatic local integration on success. One-shot scheduler tasks 31 (17:00 build) and 32 (next-morning check) were created, then **disabled on 2026-09-28** when Drew asked to grill the details before running. Re-enable or replace them only after the revised scope and acceptance bar are settled.
 - [Owner feel test](wayfinder-jester/tickets/feel-test-phase1.md): open. Eight completed live turns measured about 2.8 s median to first audio, above the ~1.5 s handoff target; a 10–15 minute owner check is still required before EBI control.
 - [Allwork trigger decision](wayfinder-jester/tickets/allwork-trigger-at-cutover.md): open. The installed trigger still matches “Jester”; the idea-saving feature was later canceled, so the shelved Goku patch must not be activated without choosing its remaining role.
 - [EBI interface decision](wayfinder-jester/tickets/may-jester-change-ebi.md): open. Full guest authorization and pure stop need small local EBI API changes and separate tests.
-- **Next build frontier:** the scheduled build starts with streaming, privacy and transcript parity; it then builds EBI actions and events in isolated copies. The owner feel test remains the final experience gate.
+- **Next frontier:** grill the full experience and morning acceptance bar with Drew, revise the manifest, then re-enable or replace the schedule. The owner feel test remains the final experience gate.
 - **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
 
 ## Already implemented infrastructure
