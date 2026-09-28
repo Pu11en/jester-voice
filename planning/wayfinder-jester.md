@@ -40,6 +40,7 @@
 - [Allwork trigger decision](wayfinder-jester/tickets/allwork-trigger-at-cutover.md): resolved to Goku for the existing trigger; the new idea-saving feature remains canceled. The installed trigger still matches “Jester” until the build task runs.
 - [EBI interface decision](wayfinder-jester/tickets/may-jester-change-ebi.md): resolved to narrow local, tested EBI changes for status and pure stop. Guest grants are deferred. Live activation remains separate from safe-copy build checks.
 - **Direct-tag decision:** Drew chose tag instructions only while Jester is already engaged. Dormant tag speech remains transcript only.
+- **Follow-up timing:** Drew chose 60 seconds after the last accepted Drew/Jester exchange. Ambient speech does not extend it; an explicit ending can close it sooner.
 - [Computer-work boundary](wayfinder-jester/tickets/computer-work-boundary.md): resolved to A. EBI sessions perform project/computer work; Jester handles voice, identity, exact routing and narrow read-only EBI status/history checks.
 - [Voice-to-EBI handoff audit](wayfinder-jester/research/voice-to-ebi-handoff.md): records the typed-equivalent flow and concrete API limits: `/spoken` accepts only 4,000 characters, returns acceptance before asynchronous delivery, and lacks an idempotent request ID; `/spawn` cannot choose the first-turn backend/model in one call.
 - [Spoken prompt shape](wayfinder-jester/tickets/spoken-prompt-shape.md): resolved to one clean, faithful prompt, automatically sent when clear, with no routine readback.
