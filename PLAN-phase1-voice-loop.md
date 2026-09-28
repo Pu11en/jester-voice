@@ -43,7 +43,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - Stall cue: emits `thinking` if no word has arrived after 2.5 s.
   - `node --test` uses a **fake app-server script** (a tiny Node process speaking the same JSON-RPC) and never the real model.
   - Add `scripts/smoke-brain.sh` for one live call, run by hand only.
-- [ ] **5. Discord voice I/O (Node).** `src/voice.mjs`:
+- [x] **5. Discord voice I/O (Node).** `src/voice.mjs`:
   - Log in with discord.js (intents: Guilds, GuildVoiceStates) and `joinVoiceChannel` with `selfDeaf:false, selfMute:false`, plus DAVE debug logging (copy the pattern from `drew-ai-voice-runtime/extensions/voice_transcripts/src/transport.mjs`).
   - Receive: subscribe per user, decode Opus → 48 k stereo → **16 k mono** frames → worker. Skip bots and Jester itself.
   - Playback: `AudioPlayer` fed from a PCM stream per reply. `stopNow()` stops playback immediately, and it tracks how many ms of each reply actually played.

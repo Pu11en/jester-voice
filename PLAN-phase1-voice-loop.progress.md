@@ -6,3 +6,6 @@
 
 ## **4. Brain client (Node).** `src/brain.mjs` wraps `codex app-server`, following `bench/bench_brain.py`, which is proven. (built alongside other steps)
 - — the step is finished and committed
+
+## **5. Discord voice I/O (Node).** `src/voice.mjs`: (built alongside other steps)
+- — the step is finished and committed
