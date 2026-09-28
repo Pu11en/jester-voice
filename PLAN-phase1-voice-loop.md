@@ -32,7 +32,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - Turn end: prob > 0.5 means `turn_end` right away. Otherwise fall back after 1.8 s of silence, or after 7 s if prob < 0.05 and the last word is a connector (to/the/and/with/of/um/uh/like/so/but/or/because).
   - Emit `{"ev":"turn_end","speaker","text","ms":{...}}` with timings.
   - Pytest: feed a committed test WAV. Generate it with Kokoro in `worker/tests/data/`; do not commit owner audio. Assert one `turn_end` with the expected words, and no `turn_end` when the WAV is cut mid-sentence with a 1 s pause.
-- [ ] **3. Speech worker: speaking.**
+- [x] **3. Speech worker: speaking.**
   - Add `{"op":"say","id","text"}`: Kokoro GPU (`af_heart`, `$JESTER_MODELS_DIR/kokoro-v1.0.onnx`) streams sentence chunks as `{"ev":"audio_out","id","pcm":b64}`, 48 kHz **stereo** s16, ready for Discord. It ends with `{"ev":"say_done","id"}`.
   - Add `{"op":"cancel","id"}`: stop generating and drop queued chunks.
   - Pytest: first chunk in under 800 ms after warm-up, and cancel stops output within one chunk.
