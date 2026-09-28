@@ -1,6 +1,6 @@
 # Plan — Phase 1: Talk to Jester in Discord (the smallest real loop)
 
-Check: bash /home/drewp/main-projects/jester-voice/scripts/check.sh
+Check: bash scripts/check.sh
 Try: cd /home/drewp/main-projects/jester-voice && npm start
 Open: the Discord voice room from `VOICE_CHANNEL_ID` (Jester joins when the owner does)
 
@@ -10,10 +10,12 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
 
 ## Ground rules for every task
 - **Layout:** Node 22 app in `src/` handles Discord I/O, orchestration and the brain client. The Python speech worker lives in `worker/` and handles VAD, Smart Turn, Parakeet and Kokoro on the GPU. They talk over the worker's stdin/stdout using JSON lines, with audio as base64 PCM.
+- **Builds run in a safe copy of the repo**, and gitignored files (`bench/.venv`, `bench/data/models`) are NOT in the copy. Always use the absolute paths `/home/drewp/main-projects/jester-voice/bench/.venv/bin/python` and `/home/drewp/main-projects/jester-voice/bench/data/models/…` (env `JESTER_PYTHON`, `JESTER_MODELS_DIR` defaulting to those). `scripts/check.sh` must `cd "$(dirname "$0")/.."` (the copy it lives in), not the main folder.
 - **Python:** reuse `bench/.venv` (it already has CUDA 12 wheels; `onnxruntime-gpu` is pinned to 1.23 because the driver only supports CUDA 12.9). Do **not** create another multi-GB venv, because C: is nearly full. Copy `add_nvidia_libs()` from `bench/bench_stt.py`.
 - **Secrets:** read `DISCORD_BOT_TOKEN` and `DISCORD_OWNER_ID` from the EBI env file (`JESTER_EBI_ENV_FILE`, default `/home/drewp/main-projects/ebi-agent-chat-relay/.env`), the same way the old voice bot does. Guild/channel IDs go in `.env` (`DISCORD_GUILD_ID`, `DISCORD_VOICE_CHANNEL_ID`, `DISCORD_TRANSCRIPT_CHANNEL_ID`); the values are in `~/.local/share/drew-ai-voice-transcripts/voice.env` as `VOICE_*`. Never commit `.env`; the repo is public.
 - **Same bot token as EBI:** only one voice connection per bot per server. The old voice bot now only joins on `!voice join`, so it doesn't conflict as long as it isn't joined. Never run both in voice at once.
 - **The check must never call Luna or Discord.** Use fakes. Live smoke scripts go in `scripts/smoke-*.sh`, run by hand.
+- **No questions during the build**: if something is ambiguous, pick the option `HANDOFF.md` favours, write the choice in `DECISIONS-LOG.md`, and continue.
 - Commit after every task. Nothing goes to GitHub until the owner has tried it.
 
 ## Tasks
@@ -21,17 +23,17 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
 - [ ] **1. Scaffold + check script.**
   - Create `package.json`: Node ≥22.12, ESM, `node --test`, and dependencies `discord.js@14.27.0`, `@discordjs/voice@0.19.2`, `@discordjs/opus@0.10.0`, `prism-media@1.3.5`, `@snazzah/davey@0.1.12`. These are the versions proven in the old extension.
   - Create `src/config.mjs` (loads both env files, validates, never logs secrets), `worker/__init__.py`, `worker/tests/`, and `.env.example` with the variables above.
-  - `scripts/check.sh`: `cd` to the repo, `npm test --silent`, then `bench/.venv/bin/python -m pytest -q worker/tests`. It must pass in under 2 minutes, with one trivial test on each side.
+  - `scripts/check.sh`: `cd` to the repo, `npm ci --silent` if `node_modules` is missing, then `npm test --silent`, then `$JESTER_PYTHON -m pytest -q worker/tests` (install `pytest` into that venv if it's missing). It must pass in under 2 minutes, with one trivial test on each side.
   - Add `node_modules/` to `.gitignore` if it's missing.
 - [ ] **2. Speech worker: listening.**
   - `worker/speech.py` reads JSON lines on stdin: `{"op":"audio","speaker":id,"pcm":b64}` (16 kHz mono s16, 32 ms frames) and `{"op":"reset","speaker":id}`.
-  - Per speaker it runs Silero VAD (`bench/data/models/silero_vad.onnx`, 32 ms frames) and emits `speech_start`, then `pause` after 200 ms of silence.
+  - Per speaker it runs Silero VAD (`$JESTER_MODELS_DIR/silero_vad.onnx`, 32 ms frames) and emits `speech_start`, then `pause` after 200 ms of silence.
   - At each pause it runs Smart Turn v3.2 GPU (**pad at the start**, keep the last 8 s) and Parakeet v2 GPU on the utterance. It emits `{"ev":"pause","speaker","prob","text"}`.
   - Turn end: prob > 0.5 means `turn_end` right away. Otherwise fall back after 1.8 s of silence, or after 7 s if prob < 0.05 and the last word is a connector (to/the/and/with/of/um/uh/like/so/but/or/because).
   - Emit `{"ev":"turn_end","speaker","text","ms":{...}}` with timings.
   - Pytest: feed a committed test WAV. Generate it with Kokoro in `worker/tests/data/`; do not commit owner audio. Assert one `turn_end` with the expected words, and no `turn_end` when the WAV is cut mid-sentence with a 1 s pause.
 - [ ] **3. Speech worker: speaking.**
-  - Add `{"op":"say","id","text"}`: Kokoro GPU (`af_heart`, `bench/data/models/kokoro-v1.0.onnx`) streams sentence chunks as `{"ev":"audio_out","id","pcm":b64}`, 48 kHz **stereo** s16, ready for Discord. It ends with `{"ev":"say_done","id"}`.
+  - Add `{"op":"say","id","text"}`: Kokoro GPU (`af_heart`, `$JESTER_MODELS_DIR/kokoro-v1.0.onnx`) streams sentence chunks as `{"ev":"audio_out","id","pcm":b64}`, 48 kHz **stereo** s16, ready for Discord. It ends with `{"ev":"say_done","id"}`.
   - Add `{"op":"cancel","id"}`: stop generating and drop queued chunks.
   - Pytest: first chunk in under 800 ms after warm-up, and cancel stops output within one chunk.
   - Cap Parakeet's ONNX arena with `gpu_mem_limit` so both fit in 8 GB, and log peak VRAM at startup.
