@@ -69,7 +69,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - If Discord voice disconnects, reconnect and rejoin only when the owner is still in the configured room and has not said "Jester, leave". Clean up subscriptions and audio streams after each disconnect.
   - Bound queued input audio, pending TTS chunks, and log growth so a long session cannot consume memory or disk without limit. Drop stale audio after a disconnect or barge-in.
   - Add fake-process and fake-voice tests for a worker crash, a hung brain, a voice disconnect, and stale queued audio. `bash scripts/check.sh` must remain offline and finish in about 2 minutes.
-- [ ] **10. Package the local owner trial.**
+- [x] **10. Package the local owner trial.**
   - `npm start` runs Node, spawns the worker, and shuts down cleanly on SIGINT. Load the existing `VOICE_GUILD_ID`, `VOICE_CHANNEL_ID`, and `VOICE_TRANSCRIPT_CHANNEL_ID` from the old voice env file when Jester's own `DISCORD_*` IDs are absent; continue loading the EBI token and owner ID. Test config with fake values, never print credentials.
   - Add `deploy/jester-voice.service` with an absolute project path, `Restart=always`, and a short restart delay, but do not enable it yet. Add short README instructions for starting and stopping a local trial.
   - Verify startup and recovery with offline fakes. Check the live smoke scripts for syntax only; do not log into Discord, run live smoke tests, enable the service, or stop `drew-ai-voice-transcripts.service` before the owner chooses whether Jester uses the existing EBI bot account or a separate bot and tries the voice room.

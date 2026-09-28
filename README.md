@@ -8,23 +8,24 @@ The target experience is simple: join the designated Discord voice room and talk
 
 Jester is a separate service. It does not replace EBI and it is not a rewrite of the existing one-way EBI voice/transcript extension.
 
-## Current design
+## Current Phase 1 build
 
-```text
-Discord voice
-    <->
-Jester voice/conversation layer
-    <->
-Codex subscription / GPT-6 Luna (brain candidate)
-    <->
-Deterministic Jester Control
-    <->
-Existing EBI / ccdb sessions, tools, projects and events
-```
+Jester joins the configured Discord room when the owner enters, listens and speaks through the local GPU speech worker, and uses the Codex app-server for replies. EBI session control is a separate Phase 2 plan.
 
-The final local voice engine/components are intentionally NOT pinned yet. The coding session must inspect the owner's Lenovo, run AllGit research, and benchmark viable open-source realtime voice stacks/components before committing.
+## Local owner trial
 
-See `HANDOFF.md` for the source-of-truth product and engineering specification.
+1. Install Node 22.12 or newer and run `npm ci` in this project.
+2. Copy `.env.example` to `.env`. The bot token and owner ID are read from the EBI env file; set the Discord room IDs in `.env` or use the old `VOICE_*` IDs from `~/.local/share/drew-ai-voice-transcripts/voice.env`.
+3. Check that the benchmark Python environment and speech models named in `.env.example` exist, and that the old voice bot is not connected to the room.
+4. Run `npm start`, then join the configured Discord voice room. Press Ctrl+C to stop Jester cleanly.
+
+The systemd unit in `deploy/jester-voice.service` is provided for a later owner-managed setup; it is not enabled by this build. Do not run Jester and the old voice bot in the same server voice room at once.
+
+Before relying on it, the owner still needs to try the local voice room and check conversational timing, barge-in, and Discord permissions. The automated check only syntax-checks the live smoke scripts; it never connects to Discord or calls the model.
+
+## Design and references
+
+The selected Phase 1 components are Parakeet, Silero + Smart Turn, Kokoro, and the Codex app-server. See `HANDOFF.md` and `REPLACES_OLD_VOICE.md` for the source specifications and benchmarks.
 
 ## Important decisions
 
