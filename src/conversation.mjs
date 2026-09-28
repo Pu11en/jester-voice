@@ -228,8 +228,9 @@ export class Conversation {
     // Classify the final utterance itself: carried draft words must not hide an
     // ending/side address or reuse an old wake name after the window expires.
     const wasEngaged = this.attention.engaged;
-    if (this.attention.classify(event.text) === "ambient" && wasEngaged &&
-      /^[\p{L}][\p{L}'-]*\s*[,;:—–-]/u.test(event.text.trim())) {
+    const maybeDirectTag = /^(?:and\s+)?[\p{L}][\p{L}'-]*\s*[,;:!?—–-]/iu.test(event.text.trim());
+    if (wasEngaged && maybeDirectTag &&
+        (this.attention.classify(event.text) === "ambient" || /^and\s+/iu.test(event.text.trim()))) {
       await this.#refreshSessionTags();
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
     }
@@ -243,7 +244,8 @@ export class Conversation {
     const text = this.turn?.resumed
       ? mergeText(this.turn.carriedText || this.turn.pauseText, event.text)
       : event.text.trim();
-    const intent = this.ownerRouter ? parseOwnerIntent(text) : null;
+    const intent = this.ownerRouter ?
+      parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) : null;
     if (intent) {
       await this.#abortDraft();
       if (["message", "stop", "close", "runtime", "create", "dependency"].includes(intent.kind)) {

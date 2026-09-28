@@ -101,6 +101,18 @@ test("named owner task routes after final speech; transcript-only and guests do 
   });
 });
 
+test("an ordinary comma-led follow-up reaches the brain, not the session router", async () => {
+  const handled = [];
+  const ownerRouter = { reset() {}, sessionTags: async () => ["frankie"],
+    handle: async (...args) => { handled.push(args); return "Wrong session action."; } };
+  await withConversation({ ownerRouter }, async ({ events, brain }) => {
+    events("turn_end", { text: "Actually, can you explain that again?" });
+    await waitUntil(() => brain.asks.length === 1, "ordinary follow-up");
+    assert.deepEqual(brain.asks, ["Actually, can you explain that again?"]);
+    assert.equal(handled.length, 0);
+  });
+});
+
 test("just-listen cancels previously scheduled follow-on work", async () => {
   let canceled = 0;
   const ownerRouter = { reset() {}, sessionTags: async () => [],

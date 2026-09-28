@@ -3,7 +3,7 @@ const NAME = "([\\p{L}][\\p{L}\\p{N}'-]*)";
 const statusOne = new RegExp(`^(?:what(?:'s| is) |what is )${NAME} (?:doing|working on|up to)[?.!]*$`, "iu");
 const CORRECTION = new RegExp(`^(?:actually|no|wait|rather)\\s+${NAME}\\s*[,;:—–-]*\\s*`, "iu");
 const TELL = new RegExp(`^(?:and\\s+)?(?:tell|ask|message)\\s+${NAME}(?:\\s+to\\s+|\\s+that\\s+|[,;:—–-]\\s*|\\s+|$)`, "iu");
-const DIRECT = new RegExp(`^(?:and\\s+)?${NAME}\\s*[,;:—–-]\\s*`, "iu");
+const DIRECT = new RegExp(`^(?:and\\s+)?${NAME}\\s*[,;:!?—–-]\\s*`, "iu");
 const STOP = new RegExp(`^(?:stop|interrupt)(?:\\s+the)?(?:\\s+current)?(?:\\s+turn\\s+(?:in|for))?\\s+${NAME}[?.!]*$`, "iu");
 const CLOSE = new RegExp(`^(?:close|archive|end)(?:\\s+the)?(?:\\s+session)?\\s+${NAME}[?.!]*$`, "iu");
 const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(codex|claude|sonnet|deepseek|dsh)(?:\\s+(sonnet|opus|haiku|auto))?[?.!]*$`, "iu");
@@ -13,7 +13,7 @@ const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|compl
 const WHEN_BOTH = new RegExp(`^(?:when|after)\\s+(?:both\\s+)?${NAME}\\s+and\\s+${NAME}\\s+(?:finish|are done|complete)\\b`, "iu");
 
 /** Pure first pass. No model text or transcript event can execute an action here. */
-export function parseOwnerIntent(raw) {
+export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   const text = String(raw || "").trim().replace(WAKE, "").trim();
   if (/^who(?:'s| is)\s+(?:running|working|active)[?.!]*$/i.test(text)) return { kind: "status-all" };
   const status = statusOne.exec(text);
@@ -33,7 +33,12 @@ export function parseOwnerIntent(raw) {
   if (when) return { kind: "dependency", source: when[1], target: when[2], instruction: when[3].trim() };
   if (WHEN_BOTH.test(text)) return { kind: "unsupported", reason: "combined-results" };
 
-  const first = TELL.exec(text) || DIRECT.exec(text);
+  const explicit = TELL.exec(text);
+  const direct = explicit ? null : DIRECT.exec(text);
+  // The voice loop supplies current tags. A comma after an ordinary first
+  // word ("Actually, ...") must stay in conversation, not become a command.
+  if (direct && knownTags && !knownTags.has(direct[1].toLowerCase())) return null;
+  const first = explicit || direct;
   if (!first) return null;
   let target = first[1];
   let body = text.slice(first[0].length).trim();
