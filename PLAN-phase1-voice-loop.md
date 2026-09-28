@@ -20,7 +20,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
 
 ## Tasks
 
-- [ ] **1. Scaffold + check script.**
+- [x] **1. Scaffold + check script.**
   - Create `package.json`: Node ≥22.12, ESM, `node --test`, and dependencies `discord.js@14.27.0`, `@discordjs/voice@0.19.2`, `@discordjs/opus@0.10.0`, `prism-media@1.3.5`, `@snazzah/davey@0.1.12`. These are the versions proven in the old extension.
   - Create `src/config.mjs` (loads both env files, validates, never logs secrets), `worker/__init__.py`, `worker/tests/`, and `.env.example` with the variables above.
   - `scripts/check.sh`: `cd` to the repo, `npm ci --silent` if `node_modules` is missing, then `npm test --silent`, then `$JESTER_PYTHON -m pytest -q worker/tests` (install `pytest` into that venv if it's missing). It must pass in under 2 minutes, with one trivial test on each side.
