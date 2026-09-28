@@ -40,7 +40,8 @@ test("reads current session facts and ignores another speaker", async () => {
   const { router, calls } = setup();
   assert.equal(await router.handle("Jester, what is Frankie doing?", { speakerId: ownerId }),
     "franky is running. Task: Checking login");
-  assert.equal(await router.handle("Who's running?", { speakerId: ownerId }), "Running: franky.");
+  assert.equal(await router.handle("Who's running?", { speakerId: ownerId }),
+    "Sessions: franky (running): Checking login.");
   assert.equal(await router.handle("Tell Frankie to deploy", { speakerId: "someone else" }), null);
   assert.equal(calls.length, 0);
 });

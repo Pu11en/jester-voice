@@ -62,6 +62,37 @@ test("uncertain delivery retries the same request ID; failed source blocks dispa
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("group handoff waits for every source, dispatches once, and blocks on a failed source", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const file = join(dir, "dependencies.json");
+  const secondId = "1554149594718281869";
+  const calls = [];
+  const client = { snapshot: async () => [{ threadId: destinationId, closed: false }],
+    sendSpoken: async payload => { calls.push(payload); return { status: "posted" }; } };
+  try {
+    const deps = new Dependencies({ client, ownerId, file });
+    await deps.start();
+    const sources = [{ threadId: sourceId, label: "zoro" }, { threadId: secondId, label: "sanji" }];
+    await deps.addGroup({ sources, destinationId, task: "check links" });
+    await deps.accepted(sourceId);
+    assert.equal(calls.length, 0);
+    await deps.accepted(secondId);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].threadId, destinationId);
+    await deps.close();
+    const resumed = new Dependencies({ client, ownerId, file });
+    await resumed.start();
+    await resumed.accepted(sourceId);
+    await resumed.accepted(secondId);
+    assert.equal(calls.length, 1);
+    await resumed.addGroup({ sources, destinationId, task: "do not run" });
+    await resumed.failed(sourceId, { terminal: true });
+    await resumed.accepted(secondId);
+    assert.equal(calls.length, 1);
+    await resumed.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("just-listen cancellation prevents a queued follow-on task", async () => {
   const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
   const calls = [];

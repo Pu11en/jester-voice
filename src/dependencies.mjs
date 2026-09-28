@@ -64,21 +64,40 @@ export class Dependencies {
     return item;
   }
 
+  async addGroup({ sources, destinationId, task }) {
+    if (!Array.isArray(sources) || sources.length < 2 || sources.length > 100 ||
+        new Set(sources.map(s => s.threadId)).size !== sources.length ||
+        sources.some(s => !/^\d{17,20}$/.test(s.threadId) || s.threadId === destinationId) ||
+        !/^\d{17,20}$/.test(destinationId) || !task?.trim() || task.length > 24_000) {
+      throw new Error("Invalid group follow-on task");
+    }
+    const item = { id: randomUUID(), kind: "group", sources: sources.map(s => ({
+      threadId: s.threadId, label: String(s.label || "session").slice(0, 80),
+    })), destinationId, task: task.trim(), completed: {}, requestId: randomUUID(),
+      status: "pending", createdAt: new Date(this.now()).toISOString(), nextRetryAt: 0 };
+    this.items.push(item);
+    await this.#save();
+    return item;
+  }
+
   async accepted(threadId, turn = null) {
     let changed = false;
+    const readyGroups = [];
     for (const item of this.items) {
-      if (item.kind !== "results" || item.status !== "pending" ||
+      if (!["results", "group"].includes(item.kind) || item.status !== "pending" ||
           !item.sources.some(s => s.threadId === threadId) || item.completed[threadId]) continue;
       const eventAt = turn?.accepted_at || turn?.updated_at || new Date(this.now()).toISOString();
       if (Date.parse(eventAt) < Date.parse(item.createdAt)) continue;
       item.completed[threadId] = { status: "accepted", at: eventAt };
       if (Object.keys(item.completed).length === item.sources.length) {
-        item.status = "ready";
-        item.readyAt = this.now();
+        item.status = item.kind === "results" ? "ready" : "dispatching";
+        if (item.kind === "results") item.readyAt = this.now();
+        else readyGroups.push(item);
       }
       changed = true;
     }
     if (changed) await this.#save();
+    for (const item of readyGroups) await this.#dispatch(item);
     for (const item of this.items) {
       if (item.status !== "pending" || item.sourceId !== threadId) continue;
       // Persist dispatching before an external POST. Repeats use this one ID.
@@ -102,6 +121,11 @@ export class Dependencies {
           }
           changed = true;
         }
+      }
+      if (item.kind === "group" && item.status === "pending" && turn?.terminal === true &&
+          item.sources.some(s => s.threadId === threadId)) {
+        item.status = "blocked";
+        changed = true;
       }
       if (item.status === "pending" && item.sourceId === threadId) {
         item.status = "blocked";

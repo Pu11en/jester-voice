@@ -362,13 +362,13 @@ test("room transcript captures guest turns and only the heard part of Jester rep
   const transcript = { rows: [], record(...row) { this.rows.push(row); } };
   await withConversation({ answers: ["One two three four five."], transcript }, async ({ events, worker }) => {
     worker.emit("event", { ev: "turn_end", speaker: "guest", text: "A guest question." });
-    events("turn_end", { text: "Owner question?" });
+    events("turn_end", { text: "Jester, Owner question?" });
     await tick();
     events("speech_start");
     await tick();
     assert.deepEqual(transcript.rows, [
       ["Guest Name", "A guest question."],
-      ["owner", "Owner question?"],
+      ["owner", "Jester, Owner question?"],
       ["Jester", "One"],
     ]);
   });
@@ -596,7 +596,7 @@ test("ambient speech does not extend the window and dormant tags stay out of Lun
     now = 59_999;
     events("turn_end", { speaker: "guest", text: "Jester, answer me" });
     await flush();
-    assert.equal(conversation.attention.engaged, true);
+    assert.equal(conversation.attention.engaged, false);
     now = 60_000;
     events("pause", { text: "Zoro, start working", prob: 0.9 });
     events("turn_end", { text: "Zoro, start working" });

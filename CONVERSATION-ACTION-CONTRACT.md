@@ -1,6 +1,6 @@
 # Jester owner conversation and action contract
 
-September 28, 2026. **Proposed behavior for Drew to review; it is not implemented or proven.** This document turns the owner V1 scope and the failed Zoro/Jobs trial into concrete conversations that can become replay tests. [The full scope](SCOPE-jester-owner-v1-before-trial.md) remains the source for all required capabilities. Guests can appear in the room transcript but guest conversation and session control are outside V1.
+September 28, 2026. **Proposed behavior for Drew to review.** Some exact text examples now pass the [offline simulator](sim/README.md); that does not prove real speech or full owner V1 readiness. This document turns the owner V1 scope and the failed Zoro/Jobs trial into concrete conversations that can become replay tests. [The full scope](SCOPE-jester-owner-v1-before-trial.md) remains the source for all required capabilities. Guests can appear in the room transcript but guest conversation and session control are outside V1.
 
 ## One rule for every turn
 

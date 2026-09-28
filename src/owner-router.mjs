@@ -1,6 +1,6 @@
 import { parseOwnerIntent } from "./owner-intent.mjs";
 
-const PRONOUNS = new Set(["him", "her", "them", "that one", "that session"]);
+const PRONOUNS = new Set(["him", "her", "them", "it", "that one", "that session"]);
 const BIND_MS = 60_000;
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -30,9 +30,10 @@ export class OwnerRouter {
     this.postLink = postLink;
     this.dependencies = dependencies;
     this.bound = null;
+    this.lastGroup = null;
   }
 
-  reset() { this.bound = null; }
+  reset() { this.bound = null; this.lastGroup = null; }
 
   async sessionTags() {
     const sessions = await this.client.snapshot();
@@ -53,16 +54,22 @@ export class OwnerRouter {
     return current.kind === "found" && current.session.threadId === session.threadId;
   }
 
-  async handle(text, { speakerId, allowReference = false, shouldAct = () => true } = {}) {
+  async handle(text, { speakerId, allowReference = false, shouldAct = () => true,
+    intent: suppliedIntent = null } = {}) {
     if (String(speakerId) !== this.ownerId) return null;
-    const intent = parseOwnerIntent(text);
+    const intent = suppliedIntent || parseOwnerIntent(text);
     if (!intent) return null;
     if (intent.kind === "clarify") return "Please say the final task once more so I send the right words.";
     if (intent.kind === "status-all") {
-      const sessions = (await this.client.snapshot()).filter(s => !s.closed && s.state === "running");
-      if (!sessions.length) return "No EBI sessions are running right now.";
-      const names = sessions.slice(0, 5).map(s => s.tag || s.name || "unnamed session");
-      return `Running: ${names.join(", ")}${sessions.length > 5 ? `, and ${sessions.length - 5} more` : ""}.`;
+      const sessions = (await this.client.snapshot()).filter(s => !s.closed &&
+        ["running", "queued"].includes(s.state));
+      if (!sessions.length) return "No EBI sessions are running or queued right now.";
+      const summary = sessions.slice(0, 5).map(s => {
+        const name = s.tag || s.name || "unnamed session";
+        const task = s.currentTask?.trim() ? s.currentTask.trim().replace(/\s+/g, " ").slice(0, 80) : "task unavailable";
+        return `${name} (${s.state}): ${task}`;
+      });
+      return `Sessions: ${summary.join("; ")}${sessions.length > 5 ? `; and ${sessions.length - 5} more` : ""}.`;
     }
     if (intent.kind === "history") {
       const found = await this.client.searchSessions(intent.query);
@@ -121,7 +128,31 @@ export class OwnerRouter {
       }
       if (!shouldAct()) return null;
       await this.dependencies.addResultWatch({ sources });
+      this.lastGroup = { sources, until: this.now() + BIND_MS };
       return `I'll watch ${sources.length} ${sources.length === 1 ? "session" : "sessions"} and check their final replies for test steps.`;
+    }
+    if (intent.kind === "dependency-group") {
+      const group = this.lastGroup;
+      if (!group || group.sources.length !== 2 || this.now() > group.until) {
+        return "Which two sessions do you mean by both?";
+      }
+      if (!this.dependencies?.addGroup) return "I can't schedule a group follow-on task right now.";
+      const destination = await this.client.resolveTag(intent.target);
+      if (destination.kind !== "found") return `I couldn't identify ${intent.target} exactly.`;
+      const current = (await this.client.snapshot()).filter(s => !s.closed &&
+        ["running", "queued"].includes(s.state));
+      const currentIds = new Set(current.map(s => s.threadId));
+      if (group.sources.some(s => !currentIds.has(s.threadId)) ||
+          group.sources.some(s => s.threadId === destination.session.threadId)) {
+        return "One of those sessions changed. Please name the two sources again.";
+      }
+      if (!(await this.#stillTarget(intent.target, destination.session, false))) {
+        return "That destination tag changed. Please say the task again.";
+      }
+      if (!shouldAct()) return null;
+      await this.dependencies.addGroup({ sources: group.sources,
+        destinationId: destination.session.threadId, task: intent.instruction });
+      return `When both finish successfully, I'll send one task to ${destination.session.tag || intent.target}.`;
     }
     if (intent.kind === "dependency") {
       if (!this.dependencies) return "Follow-on tasks are unavailable right now.";
@@ -167,16 +198,33 @@ export class OwnerRouter {
         return "I couldn't verify whether the session was created. I won't create it twice.";
       }
       this.bound = { threadId: created.thread_id, until: this.now() + BIND_MS };
-      return `I started a ${choice.backend} session for ${project.name}. Its tag is ${created.voice_label || "still being assigned"}.`;
+      const state = ["queued", "running"].includes(created.status) ?
+        ` EBI reports the first task is ${created.status}.` :
+        " I can't verify that its first task started yet.";
+      return `I created a ${choice.backend} session for ${project.name}. Its tag is ${created.voice_label || "still being assigned"}.${state}`;
     }
     const resolved = await this.#target(intent.target, allowReference);
     if (resolved.kind === "ambiguous") return `More than one session matches ${intent.target}. Please name the exact one.`;
     if (resolved.kind !== "found") return `I can't find an open session named ${intent.target}.`;
     const session = resolved.session;
     const name = session.tag || session.name || "that session";
-    if (intent.kind === "status-one") {
+    if (["status-one", "status-last", "session-discuss"].includes(intent.kind)) {
+      this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
       const task = session.currentTask ? ` Task: ${session.currentTask.slice(0, 140)}${session.currentTask.length > 140 ? "…" : ""}` : "";
-      return `${name} is ${session.state}.${task}`;
+      let recent = "";
+      if (this.client.threadMessages) {
+        try {
+          const messages = await this.client.threadMessages(session.threadId, 12);
+          const bots = messages.filter(message => message.is_bot && message.content?.trim());
+          const dated = bots.filter(message => Number.isFinite(Date.parse(message.created_at)));
+          const last = dated.length ? dated.sort((a, b) =>
+            Date.parse(b.created_at) - Date.parse(a.created_at))[0] : bots.at(-1);
+          if (last) recent = ` Last reported: ${last.content.trim().replace(/\s+/g, " ").slice(0, 180)}`;
+        } catch { /* State still has a truthful, narrower answer. */ }
+      }
+      const project = session.project ? ` in ${session.project}` : "";
+      const state = session.state === "history" ? "not running now" : session.state;
+      return `${name} is ${state}${project}.${task}${recent}`;
     }
     if (intent.kind === "stop") {
       if (!(await this.#stillTarget(intent.target, session, allowReference))) {

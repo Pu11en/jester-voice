@@ -1,7 +1,10 @@
-const WAKE = /^(?:(?:hey|hi|hello|okay|ok)\s*[,!.]?\s+)?jester\b[\s,!.:;—–-]*/i;
+const WAKE = /^(?:(?:hey|hi|hello|okay|ok|yo)\s*[,!.]?\s+)?jester\b[\s,!.:;—–-]*/i;
 const NAME = "([\\p{L}][\\p{L}\\p{N}'-]*)";
 const statusOne = new RegExp(`^(?:what(?:'s| is) |what is )${NAME} (?:doing|working on|up to)[?.!]*$`, "iu");
+const statusLast = /^(?:what did (?:it|he|she|they) finish|what (?:did|has) (?:it|he|she|they) (?:done|complete))[?.!]*$/iu;
+const discussSession = new RegExp(`^(?:help me (?:figure out|understand)|can you help me with|let's discuss|let's talk about).+?\\b(?:i mean|actually)\\s+${NAME}[?.!]*$`, "iu");
 const CORRECTION = new RegExp(`^(?:actually|no|wait|rather)\\s+${NAME}\\s*[,;:—–-]*\\s*`, "iu");
+const TARGET_CORRECTION = new RegExp(`[,;:—–-]\\s*(?:wait|actually|no)\\s*[,;:—–-]?\\s*${NAME}\\s*[,;:—–-]+\\s*`, "iu");
 const TELL = new RegExp(`^(?:and\\s+)?(?:tell|ask|message)\\s+${NAME}(?:\\s+to\\s+|\\s+that\\s+|[,;:—–-]\\s*|\\s+|$)`, "iu");
 const DIRECT = new RegExp(`^(?:and\\s+)?${NAME}\\s*[,;:!?—–-]\\s*`, "iu");
 const STOP = new RegExp(`^(?:stop|interrupt)(?:\\s+the)?(?:\\s+current)?(?:\\s+turn\\s+(?:in|for))?\\s+${NAME}[?.!]*$`, "iu");
@@ -11,6 +14,7 @@ const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:i
 const HISTORY = /^(?:find|look up|search for)(?: the)? (?:session|thread)(?: where we| that| about| for)? (.+?)[?.!]*$/iu;
 const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|completes)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
 const WHEN_RESULTS = /^(?:when|after)\s+(.+?)\s+(?:finish|finishes|are done|is done|complete|completes)[,;:]?\s+(?:tell|show|give)\s+me\s+(?:what\s+(?:i|we)\s+can\s+test|(?:the\s+)?test(?:ing)?\s+(?:ideas|steps|suggestions))[?.!]*$/iu;
+const WHEN_BOTH = new RegExp(`^(?:when|after)\\s+both\\s+(?:finish|are done|complete)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
 const ALL_RUNNING = /^(?:all\s+(?:(?:of\s+)?(?:the\s+)?|my\s+)?(?:currently\s+)?(?:running|active|working)\s+sessions?|everyone\s+working)$/iu;
 
 function resultTargets(raw) {
@@ -30,6 +34,9 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   }
   const status = statusOne.exec(text);
   if (status) return { kind: "status-one", target: status[1] };
+  if (statusLast.test(text)) return { kind: "status-last", target: "it" };
+  const discussion = discussSession.exec(text);
+  if (discussion) return { kind: "session-discuss", target: discussion[1] };
   const stop = STOP.exec(text);
   if (stop) return { kind: "stop", target: stop[1] };
   const close = CLOSE.exec(text);
@@ -43,6 +50,8 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   if (history) return { kind: "history", query: history[1].trim().replace(/^(?:worked on|talked about|did)\s+/iu, "") };
   const when = WHEN.exec(text);
   if (when) return { kind: "dependency", source: when[1], target: when[2], instruction: when[3].trim() };
+  const both = WHEN_BOTH.exec(text);
+  if (both) return { kind: "dependency-group", target: both[1], instruction: both[2].trim() };
   const results = WHEN_RESULTS.exec(text);
   if (results) {
     const parsed = resultTargets(results[1]);
@@ -63,6 +72,11 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   if (correction) {
     target = correction[1];
     body = body.slice(correction[0].length).trim();
+  }
+  const targetCorrection = TARGET_CORRECTION.exec(body);
+  if (targetCorrection) {
+    target = targetCorrection[1];
+    body = body.slice(targetCorrection.index + targetCorrection[0].length).trim();
   }
   const taskCorrection = /(?:[,;:—–-]\s*|\b)(?:actually|no,?\s*|rather|instead)\s+/iu.exec(body);
   if (taskCorrection) {

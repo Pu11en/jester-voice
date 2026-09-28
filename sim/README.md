@@ -1,0 +1,9 @@
+# Jester offline conversation simulation
+
+Run `node sim/run.mjs` from the Jester project. It feeds scripted owner/guest turns through the real `Conversation`, `OwnerRouter`, `Presence`, and intent parser with fake Discord, Luna, and EBI. It checks speech, silence, target IDs, exact fake EBI writes, mode changes, and no-action boundaries. The JSON evidence is in `sim/results/latest.json`; it contains no live project content or credentials. The simulator does not call a model, spend API money, start a worker, enter Discord, or post to EBI.
+
+Then run `python3 sim/review.py 8798` and open `http://localhost:8798/`. The localhost page copies the case-by-case human review pattern from Drew's Eval: it shows what Jester heard, said, and sent, plus an automatic grade. Drew can mark **Looks right**, **Needs change**, or **Unsure** and add a note. Marks persist in `sim/results/review.json` through page reloads and simulation reruns. Read and incorporate that feedback before any live Discord test.
+
+The scenarios are in `sim/scenarios.mjs`. Add a real trial phrase there before fixing its behavior. Passing text simulation does not prove speech recognition, audio latency, Discord muting, a real EBI receipt, or natural phrasing outside these scripts. Those need separate offline audio checks and then a supervised disposable live session.
+
+This follows the same scripted multi-turn, mock-tool approach documented by [LiveKit Agents](https://docs.livekit.io/testing/unit-tests/) and [Pipecat Evals](https://docs.pipecat.ai/pipecat/evals/scripted-scenarios). Their built-in runners assume their own agent transports; this small adapter runs Jester's existing Discord/Node controller directly.

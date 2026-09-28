@@ -5,7 +5,8 @@ import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 
-const LEAVE_PHRASE = /^\s*jester[\s,]+(?:leave|disconnect)\s*[.!?]*\s*$/i;
+const LEAVE_PHRASE = /^\s*(?:(?:hey|yo)\s+)?jester[\s,]+(?:(?:shut\s+up[,\s]+)?(?:leave|disconnect|go\s+away))\s*[.!?]*\s*$/i;
+const ACTIVE_DISCONNECT = /^\s*(?:no[,\s]+)?disconnect(?:[,\s]+leave)?\s*[.!?]*\s*$/i;
 const PAUSE_PHRASE = /^\s*jester[\s,]+(?:pause|stop)\s+(?:recording|transcribing)\s*[.!?]*\s*$/i;
 const PAUSE_BUTTON = "jester:recording:pause";
 const RESUME_BUTTON = "jester:recording:resume";
@@ -65,12 +66,12 @@ export class Presence extends EventEmitter {
   }
 
   /** Consume a clearly addressed owner voice command before it reaches Luna. */
-  async handleOwnerTurn(text) {
+  async handleOwnerTurn(text, { allowBareDisconnect = false } = {}) {
     if (PAUSE_PHRASE.test(text || "")) {
       await this.#setPaused(true);
       return true;
     }
-    if (!LEAVE_PHRASE.test(text || "")) return false;
+    if (!LEAVE_PHRASE.test(text || "") && !(allowBareDisconnect && ACTIVE_DISCONNECT.test(text || ""))) return false;
     await this.leave();
     return true;
   }

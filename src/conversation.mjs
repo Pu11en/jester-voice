@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 import { appendBounded } from "./bounded-log.mjs";
 import { Attention, modeCommand, possibleModeCommand } from "./attention.mjs";
 import { parseOwnerIntent } from "./owner-intent.mjs";
+import { CreateDraft } from "./create-draft.mjs";
 
 const MAX_PENDING_TTS_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_LOG_BYTES = 10 * 1024 * 1024;
@@ -53,6 +54,7 @@ export class Conversation {
     this.logFile = logFile;
     this.now = now;
     this.attention = new Attention(now);
+    this.createDraft = new CreateDraft();
     this.mode = "conversation";
     this.logger = logger;
     this.started = false;
@@ -101,6 +103,7 @@ export class Conversation {
     if (this.started) return;
     this.started = true;
     this.attention.reset();
+    this.createDraft.reset();
     this.ownerRouter?.reset();
     void this.#refreshSessionTags();
     this.mode = "conversation";
@@ -118,6 +121,7 @@ export class Conversation {
     if (!this.started) return;
     this.started = false;
     this.attention.reset();
+    this.createDraft.reset();
     this.ownerRouter?.reset();
     this.mode = "conversation";
     this.ownerSpeechVersion += 1;
@@ -142,7 +146,16 @@ export class Conversation {
     if (event?.ev === "turn_end" && event.text?.trim()) {
       void this.transcript?.record(this.voice.displayName?.(event.speaker) || event.speaker, event.text);
     }
-    if (event?.speaker !== this.ownerId) return;
+    if (event?.speaker !== this.ownerId) {
+      // A second person's speech ends the owner's active exchange. Their
+      // words remain in the room transcript but never reach Luna or EBI.
+      if (event?.ev === "speech_start" || event?.ev === "turn_end") {
+        this.attention.reset();
+        this.ownerRouter?.reset();
+        this.createDraft.reset();
+      }
+      return;
+    }
     if (event.ev === "pause") this.#pause(event);
     else if (event.ev === "speech_start") this.#speechStart();
     else if (event.ev === "turn_end") this.#turnEnd(event);
@@ -203,9 +216,11 @@ export class Conversation {
     this.ownerSpeaking = false;
     if (!event.text?.trim()) return;
     const speechVersion = this.ownerSpeechVersion;
-    if (await this.presence?.handleOwnerTurn(event.text)) {
+    if (await this.presence?.handleOwnerTurn(event.text,
+      { allowBareDisconnect: this.attention.engaged })) {
       this.attention.reset();
       this.ownerRouter?.reset();
+      this.createDraft.reset();
       await this.#abortDraft();
       return;
     }
@@ -218,6 +233,7 @@ export class Conversation {
       this.transcript?.setMode?.(requestedMode);
       this.attention.reset();
       this.ownerRouter?.reset();
+      this.createDraft.reset();
       if (this.reply) this.#stopReply();
       this.#stopLocalClip();
       await this.#abortDraft();
@@ -246,11 +262,33 @@ export class Conversation {
     const text = this.turn?.resumed
       ? mergeText(this.turn.carriedText || this.turn.pauseText, event.text)
       : event.text.trim();
+    const create = this.ownerRouter ? this.createDraft.consume(text) : { handled: false };
+    if (create.handled) {
+      await this.#abortDraft();
+      if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
+      if (!create.project) {
+        this.#speakControl(create.reply, event);
+        return;
+      }
+      // A complete draft is routed through the same checked project resolver
+      // and spawn receipt path as a one-turn request.
+      await new Promise(resolve => setTimeout(resolve, 800));
+      if (!this.started || speechVersion !== this.ownerSpeechVersion || this.mode !== "conversation") return;
+      const response = await this.ownerRouter.handle(text, {
+        speakerId: this.ownerId,
+        intent: { kind: "create", project: create.project, instruction: create.instruction,
+          runtime: null, model: null },
+        shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
+          this.mode === "conversation" && !this.presence?.paused,
+      });
+      if (response && this.started && speechVersion === this.ownerSpeechVersion) this.#speakControl(response, event);
+      return;
+    }
     const intent = this.ownerRouter ?
       parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) : null;
     if (intent) {
       await this.#abortDraft();
-      if (["message", "stop", "close", "runtime", "create", "dependency", "result-watch"].includes(intent.kind)) {
+      if (["message", "stop", "close", "runtime", "create", "dependency", "dependency-group", "result-watch"].includes(intent.kind)) {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
@@ -266,6 +304,9 @@ export class Conversation {
         response = "I can't reach the session list right now. Please try again.";
       }
       if (response && this.started && speechVersion === this.ownerSpeechVersion) {
+        if (["status-one", "status-last", "session-discuss"].includes(intent.kind)) {
+          this.brain.injectContext?.(`Verified EBI session context: ${response}`);
+        }
         this.#speakControl(response, event);
       }
       return;
@@ -493,6 +534,7 @@ export class Conversation {
 
   #voiceDisconnected() {
     this.attention.reset();
+    this.createDraft.reset();
     this.ownerRouter?.reset();
     this.ownerSpeechVersion += 1;
     this.ownerSpeaking = false;

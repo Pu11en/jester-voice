@@ -21,6 +21,10 @@ test("finds read-only status requests without treating a passing name as an acti
     { kind: "history", query: "login" });
   assert.deepEqual(parseOwnerIntent("When Zoro finishes, tell Sanji to run tests"),
     { kind: "dependency", source: "Zoro", target: "Sanji", instruction: "run tests" });
+  assert.deepEqual(parseOwnerIntent("When both finish, tell Frankie to check the links"),
+    { kind: "dependency-group", target: "Frankie", instruction: "check the links" });
+  assert.deepEqual(parseOwnerIntent("What did it finish?"),
+    { kind: "status-last", target: "it" });
   assert.deepEqual(parseOwnerIntent("When both Zoro and Sanji finish, tell me what I can test"),
     { kind: "result-watch", selection: "named", targets: ["Zoro", "Sanji"] });
   assert.deepEqual(parseOwnerIntent("When Zoro, Sanji, and Frankie finish, tell me what I can test"),
@@ -47,6 +51,8 @@ test("final direct address and corrected destination yield one task draft", () =
     { kind: "message", target: "Frankie", instruction: "we need to fix this" });
   assert.deepEqual(parseOwnerIntent("Frankie—actually Zoro—fix the navigation"),
     { kind: "message", target: "Zoro", instruction: "fix the navigation" });
+  assert.deepEqual(parseOwnerIntent("Jester, and Frankie, change the site—wait, Zoro, just review login"),
+    { kind: "message", target: "Zoro", instruction: "just review login" });
   assert.deepEqual(parseOwnerIntent("Tell him to add tests"),
     { kind: "message", target: "him", instruction: "add tests" });
   assert.deepEqual(parseOwnerIntent("Tell Frankie"), { kind: "clarify", reason: "missing-task", target: "Frankie" });
