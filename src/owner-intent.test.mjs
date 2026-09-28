@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseOwnerIntent } from "./owner-intent.mjs";
+import { parseOwnerIntent, isSessionReadFollowUp } from "./owner-intent.mjs";
 
 test("finds read-only status requests without treating a passing name as an action", () => {
   assert.deepEqual(parseOwnerIntent("Jester, what is Frankie doing?"), { kind: "status-one", target: "Frankie" });
@@ -27,6 +27,10 @@ test("finds read-only status requests without treating a passing name as an acti
     { kind: "status-last", target: "it" });
   assert.deepEqual(parseOwnerIntent("Jester, what is going on with Zoro?"),
     { kind: "status-one", target: "Zoro" });
+  assert.deepEqual(parseOwnerIntent("Jester, what happened with Zoro's audit?",
+    { knownTags: new Set(["zoro"]) }), { kind: "session-discuss", target: "zoro" });
+  assert.equal(isSessionReadFollowUp("What is this project?"), true);
+  assert.equal(isSessionReadFollowUp("What is the weather?"), false);
   assert.deepEqual(parseOwnerIntent("Jester, help me with Zoro's audit"),
     { kind: "session-discuss", target: "Zoro" });
   assert.equal(parseOwnerIntent("Jester, help me with a recipe",

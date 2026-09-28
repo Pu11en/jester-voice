@@ -125,6 +125,24 @@ test("just-listen cancels previously scheduled follow-on work", async () => {
   });
 });
 
+test("same-room process restart stays muted until Drew says talk again", async () => {
+  const presence = Object.assign(new EventEmitter(), {
+    async handleOwnerTurn() { return false; },
+    clearRestoredPresence() { this.restoredCleared = true; },
+  });
+  await withConversation({ presence, dormant: true }, async ({ conversation, voice, events }) => {
+    presence.emit("restoredPresence");
+    assert.equal(conversation.mode, "transcript");
+    assert.equal(voice.muted.at(-1), true);
+    events("turn_end", { text: "Jester, talk again" });
+    await tick();
+    assert.equal(conversation.mode, "conversation");
+    assert.equal(voice.muted.at(-1), false);
+    assert.equal(conversation.attention.engaged, false);
+    assert.equal(presence.restoredCleared, true);
+  });
+});
+
 test("accepted first sentence reaches Kokoro while Luna is still composing later speech", async () => {
   let releaseSecond;
   const secondReady = new Promise((resolve) => { releaseSecond = resolve; });

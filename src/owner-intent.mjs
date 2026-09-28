@@ -27,6 +27,13 @@ function resultTargets(raw) {
   return { selection: "named", targets };
 }
 
+/** Contextual read questions after a named session was just discussed. */
+export function isSessionReadFollowUp(raw) {
+  const text = String(raw || "").trim().replace(WAKE, "").trim();
+  return /^(?:what|how|why|is it|did it|tell me|explain|help me|should i)\b/i.test(text) &&
+    /\b(?:this project|that project|the project|its work|its result|it finish|it do|it working|it blocked|next step|next decision|that result)\b/i.test(text);
+}
+
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   const text = String(raw || "").trim().replace(WAKE, "").trim();
@@ -54,6 +61,13 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
     model: create[3] || null, instruction: create[4].trim() };
   const history = HISTORY.exec(text);
   if (history) return { kind: "history", query: history[1].trim().replace(/^(?:worked on|talked about|did)\s+/iu, "") };
+  // Broader read-only questions may use ordinary wording. A current tag is
+  // evidence of a target, never authorization for a session write.
+  if (knownTags && /^(?:what|how|why|tell me|explain|help me understand|give me (?:an? )?(?:update|summary))/iu.test(text)) {
+    const mentions = [...knownTags].filter(tag =>
+      new RegExp(`(?<![\\p{L}\\p{N}])${tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "iu").test(text));
+    if (mentions.length === 1) return { kind: "session-discuss", target: mentions[0] };
+  }
   const when = WHEN.exec(text);
   if (when) return { kind: "dependency", source: when[1], target: when[2], instruction: when[3].trim() };
   const both = WHEN_BOTH.exec(text);

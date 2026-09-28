@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 import { performance } from "node:perf_hooks";
 import { appendBounded } from "./bounded-log.mjs";
 import { Attention, modeCommand, possibleModeCommand } from "./attention.mjs";
-import { parseOwnerIntent } from "./owner-intent.mjs";
+import { parseOwnerIntent, isSessionReadFollowUp } from "./owner-intent.mjs";
 import { CreateDraft } from "./create-draft.mjs";
 
 const MAX_PENDING_TTS_BYTES = 8 * 1024 * 1024;
@@ -81,6 +81,13 @@ export class Conversation {
       if (!reason) this.voice.setSelfMuted?.(this.mode === "transcript");
       this.#voiceDisconnected();
     };
+    this.onRestoredPresence = () => {
+      this.mode = "transcript";
+      this.attention.reset();
+      this.createDraft.reset();
+      this.ownerRouter?.reset();
+      this.voice.setSelfMuted?.(true);
+    };
     this.onBrainFatal = (error) => {
       this.logger.warn?.("[conversation] brain unavailable:", error.message);
       if (this.turn && !this.turn.resumed) this.turn.brainFailed = true;
@@ -111,6 +118,7 @@ export class Conversation {
     this.worker.on("fatal", this.onWorkerFatal);
     this.voice.on?.("disconnect", this.onVoiceDisconnect);
     this.presence?.on?.("reset", this.onPresenceReset);
+    this.presence?.on?.("restoredPresence", this.onRestoredPresence);
     this.presence?.on?.("capturePaused", this.onCapturePaused);
     this.brain.on("firstWord", this.onBrainFirstWord);
     this.brain.on("fatal", this.onBrainFatal);
@@ -130,6 +138,7 @@ export class Conversation {
     this.worker.off("fatal", this.onWorkerFatal);
     this.voice.off?.("disconnect", this.onVoiceDisconnect);
     this.presence?.off?.("reset", this.onPresenceReset);
+    this.presence?.off?.("restoredPresence", this.onRestoredPresence);
     this.presence?.off?.("capturePaused", this.onCapturePaused);
     this.brain.off("firstWord", this.onBrainFirstWord);
     this.brain.off("fatal", this.onBrainFatal);
@@ -228,6 +237,7 @@ export class Conversation {
     const requestedMode = modeCommand(event.text);
     if (requestedMode) {
       this.mode = requestedMode;
+      if (requestedMode === "conversation") this.presence?.clearRestoredPresence?.();
       this.voice.setSelfMuted?.(requestedMode === "transcript");
       if (requestedMode === "transcript") await this.ownerRouter?.dependencies?.cancelPending?.();
       this.transcript?.setMode?.(requestedMode);
@@ -295,7 +305,9 @@ export class Conversation {
       return;
     }
     const intent = this.ownerRouter ?
-      parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) : null;
+      parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) ||
+      (wasEngaged && this.ownerRouter.hasReadContext?.() && isSessionReadFollowUp(text) ?
+        { kind: "session-discuss", target: "it" } : null) : null;
     if (intent) {
       this.createDraft.reset();
       await this.#abortDraft();
@@ -303,6 +315,29 @@ export class Conversation {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
+      if (["status-one", "status-last", "session-discuss"].includes(intent.kind) &&
+          this.ownerRouter.readContext) {
+        let read;
+        try {
+          read = await this.ownerRouter.readContext(intent, { allowReference: wasEngaged });
+        } catch (error) {
+          this.logger.warn?.("[conversation] session read:", error.message);
+          read = { kind: "answer", text: "I can't read that session right now. Please try again." };
+        }
+        if (!this.started || speechVersion !== this.ownerSpeechVersion || this.mode !== "conversation") return;
+        if (read.kind === "answer") this.#speakControl(read.text, event);
+        else {
+          const turn = {
+            finalText: text, accepted: true, startedAt: this.now(), endAt: this.now(),
+            sttMs: event.ms?.stt ?? null, utteranceMs: event.ms?.utterance ?? null,
+            brainFirstWordAt: null, draftDone: false, draftSentences: [],
+          };
+          this.turn = turn;
+          this.#scheduleThinking(turn);
+          this.#runDraft(turn, text, read.text);
+        }
+        return;
+      }
       let response;
       try {
         response = await this.ownerRouter.handle(text, {
@@ -348,12 +383,13 @@ export class Conversation {
     }
   }
 
-  async #runDraft(turn, text) {
+  async #runDraft(turn, text, context = null) {
     turn.requestId = `voice-turn-${++this.turnNumber}`;
     try {
       await this.interrupting;
       if (this.turn !== turn || turn.resumed) return;
-      for await (const sentence of this.brain.ask(text, { speaker: this.ownerId, requestId: turn.requestId })) {
+      for await (const sentence of this.brain.ask(text, { speaker: this.ownerId,
+        requestId: turn.requestId, context })) {
         if (this.turn !== turn || turn.resumed) return;
         // A completed sentence also proves words arrived, even for a brain adapter
         // that does not emit firstWord events.

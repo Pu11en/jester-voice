@@ -46,6 +46,19 @@ test("reads current session facts and ignores another speaker", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("binds a read-only evidence pack to the exact thread for follow-up questions", async () => {
+  const { client, calls } = setup();
+  const reader = { read: async session => `Substantive result in ${session.threadId}` };
+  const router = new OwnerRouter({ client, ownerId, sessionReader: reader });
+  const first = await router.readContext({ kind: "status-one", target: "Zoro" });
+  assert.equal(first.kind, "context");
+  assert.match(first.text, new RegExp(zoro.threadId));
+  const followUp = await router.readContext({ kind: "status-last", target: "it" },
+    { allowReference: true });
+  assert.equal(followUp.threadId, zoro.threadId);
+  assert.equal(calls.length, 0);
+});
+
 test("posts one faithful task to the exact resolved thread and binds follow-up", async () => {
   const { router, calls, setNow } = setup();
   assert.equal(await router.handle("And Frankie, we need to fix the navigation", { speakerId: ownerId }),

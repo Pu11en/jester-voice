@@ -177,10 +177,12 @@ export class EbiClient {
       { timeoutMs: 10_000 });
     if (!Array.isArray(result.messages)) throw new Error("Invalid thread messages response");
     return result.messages.map(message => ({
+      author: String(message.author || "unknown"),
       is_bot: message.is_bot === true,
       content: String(message.content || ""),
       created_at: String(message.created_at || ""),
       jump_url: typeof message.jump_url === "string" ? message.jump_url : null,
+      truncated: message.truncated === true,
     }));
   }
 

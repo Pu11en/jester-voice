@@ -1,4 +1,5 @@
 import { parseOwnerIntent } from "./owner-intent.mjs";
+import { SessionReader } from "./session-reader.mjs";
 
 const PRONOUNS = new Set(["him", "her", "them", "it", "that one", "that session"]);
 const BIND_MS = 60_000;
@@ -23,17 +24,21 @@ function runtimeChoice(intent) {
 /** Deterministic owner actions; model output never enters this action path. */
 export class OwnerRouter {
   constructor({ client, ownerId, now = () => Date.now(), postLink = null,
-    dependencies = null }) {
+    dependencies = null, sessionReader = new SessionReader({ client }) }) {
     this.client = client;
     this.ownerId = String(ownerId);
     this.now = now;
     this.postLink = postLink;
     this.dependencies = dependencies;
+    this.sessionReader = sessionReader;
     this.bound = null;
+    this.readBoundUntil = null;
     this.lastGroup = null;
   }
 
-  reset() { this.bound = null; this.lastGroup = null; }
+  reset() { this.bound = null; this.readBoundUntil = null; this.lastGroup = null; }
+
+  hasReadContext() { return this.readBoundUntil !== null && this.now() < this.readBoundUntil; }
 
   async sessionTags() {
     const sessions = await this.client.snapshot();
@@ -52,6 +57,21 @@ export class OwnerRouter {
   async #stillTarget(name, session, allowReference) {
     const current = await this.#target(name, allowReference);
     return current.kind === "found" && current.session.threadId === session.threadId;
+  }
+
+  async readContext(intent, { allowReference = false } = {}) {
+    const resolved = await this.#target(intent.target, allowReference);
+    if (resolved.kind === "ambiguous") return { kind: "answer", text: `More than one session matches ${intent.target}. Which one do you mean?` };
+    if (resolved.kind !== "found") return { kind: "answer", text: `I can't find an open session named ${intent.target}.` };
+    const session = resolved.session;
+    this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
+    try {
+      const text = await this.sessionReader.read(session);
+      this.readBoundUntil = this.now() + BIND_MS;
+      return { kind: "context", text, threadId: session.threadId };
+    } catch {
+      return { kind: "answer", text: `I found ${session.tag || session.name || "that session"}, but can't read its work right now.` };
+    }
   }
 
   async handle(text, { speakerId, allowReference = false, shouldAct = () => true,

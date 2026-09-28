@@ -20,7 +20,7 @@ Assume Jester is in the room, dormant, and EBI has a historical Zoro thread in D
 | Drew: “What did it finish?” | Give the verified latest result and any limits of what Jester can see. | Reuse the bound thread ID within this exchange; refresh evidence; zero writes. |
 | Guest starts a separate conversation; Drew later says “Tell him to do the next page.” | Silence because the exchange ended and “him” is no longer bound for action. | Transcript only; zero writes. |
 
-If the name maps to two threads, Jester asks which one and does not read a guessed thread as authoritative. If the API cannot fetch recent work, it says the status it *can* verify and that the details are unavailable. Search must work beyond today's 100-session snapshot cap.
+If the name maps to two threads, Jester asks which one and does not read a guessed thread as authoritative. If the API cannot fetch recent work, it says the status it *can* verify and that the details are unavailable. Expanding the tag pool and searching beyond today's 100-session snapshot cap are deferred by Drew's September 28 scope correction.
 
 ## Conversation 2: discuss a project without assigning work
 
@@ -113,7 +113,7 @@ This recommendation is an architectural inference from the linked project docume
 
 ## Proof gate before Drew uses Jester on real work
 
-1. Every scripted turn above passes offline with fake EBI, including zero-action cases, correction, ambiguous tag, >100 sessions, uncertain timeout, and restart; the trace shows why each decision happened.
+1. Every scripted turn above passes offline with fake EBI, including zero-action cases, correction, ambiguous tag, uncertain timeout, and restart; the trace shows why each decision happened.
 2. A long two-speaker local audio run shows stable recognition and attention under normal machine load, without the ONNX memory failure seen in the first trial.
 3. One supervised disposable live thread proves recognized final words → exact prompt → exact destination → durable receipt → actual worker state → accurate spoken confirmation. Then test on-demand status, just-listen, leave, and recovery.
 4. Only after that proof should Drew use it as the commander for a real project. A real voice feel check remains necessary; no offline repo guarantees a perfect first try.

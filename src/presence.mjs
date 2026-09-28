@@ -14,7 +14,8 @@ const RESUME_BUTTON = "jester:recording:resume";
 /** Auto-join and owner escape hatches for one configured Discord voice room. */
 export class Presence extends EventEmitter {
   constructor({ client, voice, brain, config, transcript = null, logger = console,
-    privacyFile = join(homedir(), ".local/share/jester-voice/privacy.json") } = {}) {
+    privacyFile = join(homedir(), ".local/share/jester-voice/privacy.json"),
+    stateFile = join(homedir(), ".local/share/jester-voice/presence.json") } = {}) {
     super();
     if (!client || !voice || !brain || !config) {
       throw new Error("client, voice, brain, and config are required");
@@ -26,12 +27,15 @@ export class Presence extends EventEmitter {
     this.transcript = transcript;
     this.logger = logger;
     this.privacyFile = privacyFile;
+    this.stateFile = stateFile;
     this.paused = false;
     this.notice = null;
     this.inPresence = false;
     this.dismissed = false;
+    this.restoredPresence = false;
     this.joined = false;
     this.joining = null;
+    this.leaving = null;
     this.onVoiceState = (_oldState, newState) => this.#voiceState(newState);
     this.onMessage = (message) => this.#message(message);
     this.onInteraction = (interaction) => { void this.#interaction(interaction); };
@@ -42,6 +46,7 @@ export class Presence extends EventEmitter {
 
   async start() {
     await this.#loadPrivacy();
+    await this.#loadDismissed();
     this.voice.setCapturePaused?.(this.paused);
     this.client.on("voiceStateUpdate", this.onVoiceState);
     this.client.on("messageCreate", this.onMessage);
@@ -49,7 +54,10 @@ export class Presence extends EventEmitter {
     this.voice.on?.("disconnect", this.onVoiceDisconnect);
     try {
       await this.voice.login();
-      await this.#setPresence(this.#ownerChannelId() === this.config.voiceChannelId);
+      const ownerAlreadyPresent = this.#ownerChannelId() === this.config.voiceChannelId;
+      this.restoredPresence = ownerAlreadyPresent && !this.dismissed;
+      if (this.restoredPresence) this.emit("restoredPresence");
+      await this.#setPresence(ownerAlreadyPresent);
     } catch (error) {
       this.stop();
       throw error;
@@ -65,6 +73,8 @@ export class Presence extends EventEmitter {
     clearTimeout(this.recoveryTimer);
   }
 
+  clearRestoredPresence() { this.restoredPresence = false; }
+
   /** Consume a clearly addressed owner voice command before it reaches Luna. */
   async handleOwnerTurn(text, { allowBareDisconnect = false } = {}) {
     if (PAUSE_PHRASE.test(text || "")) {
@@ -77,7 +87,9 @@ export class Presence extends EventEmitter {
   }
 
   async join() {
+    if (this.leaving) await this.leaving;
     if (!this.inPresence || this.joined || this.joining) return this.joining;
+    if (this.dismissed) await this.#saveDismissed(false);
     this.emit("reset");
     this.dismissed = false;
     this.joining = Promise.resolve(this.voice.connect())
@@ -92,6 +104,7 @@ export class Presence extends EventEmitter {
         // A transport reconnect is still the same owner room presence. Keep
         // its transcript and mode rather than splitting the room session.
         if (!this.transcript?.path) await this.transcript?.start({ channel });
+        if (this.restoredPresence) this.transcript?.setMode?.("transcript");
         await this.#showNotice();
         await this.brain.prewarm();
       })
@@ -101,14 +114,20 @@ export class Presence extends EventEmitter {
   }
 
   async leave() {
-    this.dismissed = true;
-    this.emit("reset", "owner_leave");
-    clearTimeout(this.recoveryTimer);
-    if (this.joining) await this.joining;
-    this.voice.setSelfMuted?.(true);
-    this.voice.disconnect();
-    this.joined = false;
-    await this.transcript?.finish();
+    if (this.leaving) return this.leaving;
+    this.leaving = (async () => {
+      this.dismissed = true;
+      await this.#saveDismissed(true);
+      this.emit("reset", "owner_leave");
+      clearTimeout(this.recoveryTimer);
+      if (this.joining) await this.joining;
+      this.voice.setSelfMuted?.(true);
+      this.voice.disconnect();
+      this.joined = false;
+      await this.transcript?.finish();
+    })();
+    try { await this.leaving; }
+    finally { this.leaving = null; }
   }
 
   async #voiceState(state) {
@@ -121,7 +140,10 @@ export class Presence extends EventEmitter {
     this.inPresence = present;
     if (!present) {
       this.emit("reset", "owner_departed");
+      const wasDismissed = this.dismissed;
       this.dismissed = false;
+      this.restoredPresence = false;
+      if (wasDismissed) await this.#saveDismissed(false);
       clearTimeout(this.recoveryTimer);
       if (this.joining) await this.joining;
       this.voice.disconnect();
@@ -176,6 +198,21 @@ export class Presence extends EventEmitter {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
+  }
+
+  async #loadDismissed() {
+    try {
+      this.dismissed = JSON.parse(await readFile(this.stateFile, "utf8")).dismissed === true;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+
+  async #saveDismissed(dismissed) {
+    await mkdir(dirname(this.stateFile), { recursive: true });
+    const temp = `${this.stateFile}.${randomUUID()}.tmp`;
+    await writeFile(temp, JSON.stringify({ dismissed }), { mode: 0o600 });
+    await rename(temp, this.stateFile);
   }
 
   async #setPaused(paused) {

@@ -74,10 +74,10 @@ function makeParts(fixtureState) {
   const brain = new EventEmitter();
   brain.asks = [];
   brain.context = [];
-  brain.ask = async function* (text) {
+  brain.ask = async function* (text, options = {}) {
     this.asks.push(text);
-    const context = this.context.splice(0).join(" ");
-    if (/Verified EBI session context:.*zoro/i.test(context)) {
+    const context = `${this.context.splice(0).join(" ")} ${options.context || ""}`;
+    if (/Session:\s*zoro/i.test(context)) {
       yield "Zoro reviewed the Drew's Audit landing page; we can discuss the audit next.";
     }
     else if (/hello/i.test(text)) yield "Hello.";

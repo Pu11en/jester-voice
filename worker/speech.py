@@ -35,7 +35,7 @@ NORMAL_TIMEOUT_MS = 1_800
 CONNECTOR_TIMEOUT_MS = 7_000
 CONNECTORS = {"to", "the", "and", "with", "of", "um", "uh", "like", "so", "but", "or", "because"}
 OUTPUT_RATE = 48_000
-PARAKEET_GPU_MEM_LIMIT = int(os.environ.get("JESTER_PARAKEET_GPU_MEM_LIMIT", str(3 * 1024**3)))
+PARAKEET_GPU_MEM_LIMIT = int(os.environ.get("JESTER_PARAKEET_GPU_MEM_LIMIT", str(4 * 1024**3)))
 
 
 def _models_dir() -> Path:
@@ -407,6 +407,7 @@ def main() -> None:
           f"{_vram_usage()} after model load (startup peak snapshot)", file=sys.stderr, flush=True)
     _emit({"ev": "ready"})
     for line in sys.stdin:
+        operation = None
         try:
             message = json.loads(line)
             operation = message.get("op")
@@ -436,6 +437,11 @@ def main() -> None:
                 raise ValueError(f"unsupported operation: {operation!r}")
         except Exception as error:
             print(f"speech worker input error: {error}", file=sys.stderr, flush=True)
+            if operation == "audio" and "Available memory" in str(error):
+                # ONNX's CUDA arena is exhausted. The current utterance cannot
+                # recover in place; let WorkerClient restart the model process
+                # instead of silently failing on every later utterance.
+                raise SystemExit(2) from error
 
 
 def _vram_usage() -> str:

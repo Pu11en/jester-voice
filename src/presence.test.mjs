@@ -7,7 +7,15 @@ import { readFile, rm } from "node:fs/promises";
 import test from "node:test";
 import { Presence } from "./presence.mjs";
 
-function setup({ channelId = null, transcript = null, privacyFile = join(tmpdir(), `jester-privacy-${randomUUID()}.json`) } = {}) {
+const stateFiles = new Set();
+test.after(async () => {
+  await Promise.all([...stateFiles].map(path => rm(path, { force: true })));
+});
+
+function setup({ channelId = null, transcript = null,
+  privacyFile = join(tmpdir(), `jester-privacy-${randomUUID()}.json`),
+  stateFile = join(tmpdir(), `jester-presence-${randomUUID()}.json`) } = {}) {
+  stateFiles.add(stateFile);
   const client = new EventEmitter();
   const member = { voice: { channelId } };
   client.guilds = { cache: new Map([["guild", { members: { cache: new Map([["owner", member]]) } }]]) };
@@ -22,8 +30,46 @@ function setup({ channelId = null, transcript = null, privacyFile = join(tmpdir(
   const brain = { async prewarm() { calls.prewarm++; } };
   const config = { guildId: "guild", ownerId: "owner", voiceChannelId: "room", transcriptChannelId: "text" };
   return { client, member, calls, presence: new Presence({ client, voice, brain, config, transcript,
-    privacyFile, logger: { warn() {} } }) };
+    privacyFile, stateFile, logger: { warn() {} } }) };
 }
+
+async function waitFor(predicate) {
+  const deadline = Date.now() + 1_000;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error("Timed out waiting for presence action");
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+}
+
+test("startup in an occupied room requests safe listening mode", async () => {
+  const modes = [];
+  const { presence } = setup({ channelId: "room", transcript: {
+    async start() {}, setMode(mode) { modes.push(mode); },
+  } });
+  let restored = 0;
+  presence.on("restoredPresence", () => restored++);
+  await presence.start();
+  assert.equal(restored, 1);
+  assert.deepEqual(modes, ["transcript"]);
+  presence.stop();
+});
+
+test("spoken leave remains dismissed after process restart until a new room visit", async () => {
+  const stateFile = join(tmpdir(), `jester-presence-${randomUUID()}.json`);
+  const first = setup({ channelId: "room", stateFile });
+  await first.presence.start();
+  await first.presence.leave();
+  first.presence.stop();
+  const restarted = setup({ channelId: "room", stateFile });
+  await restarted.presence.start();
+  assert.equal(restarted.calls.connect, 0);
+  restarted.client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: null });
+  await new Promise(resolve => setImmediate(resolve));
+  restarted.client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: "room" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(restarted.calls.connect, 1);
+  restarted.presence.stop();
+});
 
 test("room member can pause; only Drew resumes; paused state survives restart", async () => {
   const privacyFile = join(tmpdir(), `jester-privacy-${randomUUID()}.json`);
@@ -115,9 +161,9 @@ test("text escape hatch is restricted to owner and transcript channel", async ()
   msg("owner", "elsewhere", "!jester leave");
   assert.equal(calls.disconnect, 0);
   msg("owner", "text", "!jester leave");
-  assert.equal(calls.disconnect, 1);
+  await waitFor(() => calls.disconnect === 1);
   msg("owner", "text", "!jester join");
-  await new Promise((resolve) => setImmediate(resolve));
+  await waitFor(() => calls.connect === 2);
   assert.equal(calls.connect, 2);
   msg("owner", "text", "!jester join");
   await new Promise((resolve) => setImmediate(resolve));
@@ -159,6 +205,7 @@ test("rejoins after voice transport failure only while the owner remains present
     transcript,
     config: { guildId: "guild", ownerId: "owner", voiceChannelId: "room", transcriptChannelId: "text" },
     privacyFile: join(tmpdir(), `jester-privacy-${randomUUID()}.json`),
+    stateFile: join(tmpdir(), `jester-presence-${randomUUID()}.json`),
     logger: { warn() {} },
   });
   await presence.start();

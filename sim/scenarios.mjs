@@ -8,10 +8,13 @@ export const scenarios = [
       { speaker: "owner", text: "I think Zoro did the audit.", expect: { silence: true, writes: 0, brain: 0 } },
       { speaker: "guest", text: "Hey Jester, what did Zoro do?", expect: { silence: true, writes: 0, brain: 0 } },
       { speaker: "owner", text: "Jester, what is Zoro doing?", expect: {
-        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 0,
+        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 1,
       } },
       { speaker: "owner", text: "What did it finish?", expect: {
         says: ["reviewed", "audit"], writes: 0,
+      } },
+      { speaker: "owner", text: "What is this project?", expect: {
+        says: ["audit"], writes: 0, brain: 1,
       } },
       { speaker: "guest", text: "Let me tell you about dinner.", expect: { silence: true, writes: 0 } },
       { speaker: "owner", text: "Tell him to do the next page.", expect: { silence: true, writes: 0 } },
@@ -55,7 +58,7 @@ export const scenarios = [
       { speaker: "owner", text: "Jester, open a session in Jobs.",
         expect: { writes: 0, says: ["what should"], brain: 0 } },
       { speaker: "owner", text: "Jester, what is Zoro doing?",
-        expect: { writes: 0, says: ["zoro", "reviewed"], brain: 0 } },
+        expect: { writes: 0, says: ["zoro", "reviewed"], brain: 1 } },
       { speaker: "owner", text: "Tell it to review the login page.",
         expect: { writes: 1, writeKind: "spoken", writeTarget: "zoro",
           writeThreadId: "1553779983158349925", writeText: ["review the login page"], brain: 0 } },
@@ -117,7 +120,7 @@ export const scenarios = [
     title: "Yo Jester uses the same session route as Jester",
     steps: [
       { speaker: "owner", text: "Yo Jester, what is Zoro doing?", expect: {
-        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 0,
+        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 1,
       } },
     ],
   },
@@ -126,10 +129,10 @@ export const scenarios = [
     title: "Natural Zoro questions use checked EBI evidence",
     steps: [
       { speaker: "owner", text: "Jester, what is going on with Zoro?", expect: {
-        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 0,
+        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 1,
       } },
       { speaker: "owner", text: "Jester, help me with Zoro's audit", expect: {
-        says: ["zoro", "audit"], writes: 0, brain: 0,
+        says: ["zoro", "audit"], writes: 0, brain: 1,
       } },
     ],
   },
