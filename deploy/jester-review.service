@@ -1,0 +1,12 @@
+[Unit]
+Description=Jester local simulation review
+
+[Service]
+Type=simple
+WorkingDirectory=/home/drewp/main-projects/jester-voice
+ExecStart=/usr/bin/python3 /home/drewp/main-projects/jester-voice/sim/review.py 8798
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
