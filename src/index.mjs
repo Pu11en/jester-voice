@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
+import { AttachmentBuilder } from "discord.js";
 import { Brain } from "./brain.mjs";
 import { loadConfig } from "./config.mjs";
 import { Conversation } from "./conversation.mjs";
@@ -55,7 +56,15 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId,
     presence, transcript, stallClip, unavailableClip, ownerRouter });
   const eventWatcher = createEventWatcherImpl({ client: ebiClient, conversation, presence,
-    dependencies });
+    dependencies,
+    postResults: async (markdown, id) => {
+      const channel = voice.client.channels?.cache?.get(config.transcriptChannelId) ||
+        await voice.client.channels?.fetch?.(config.transcriptChannelId);
+      if (!channel?.send) throw new Error("Auto Transcripts is unavailable");
+      await channel.send({ content: "Jester: test steps from the watched sessions",
+        files: [new AttachmentBuilder(Buffer.from(markdown, "utf8"),
+          { name: `jester-tests-${id}.md` })], allowedMentions: { parse: [] } });
+    } });
   let idleTimer = null;
   const scheduleIdleRelease = () => {
     clearTimeout(idleTimer);

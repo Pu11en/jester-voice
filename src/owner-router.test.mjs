@@ -123,11 +123,53 @@ test("follow-on speech stores exact running source and destination IDs", async (
     destinationId: sanji.threadId, task: "run tests" }]);
 });
 
-test("combined-result request gets an honest limitation, not a false promise", async () => {
-  const { router, calls } = setup();
-  assert.match(await router.handle("When both Zoro and Sanji finish, tell me what I can test",
-    { speakerId: ownerId }), /can't combine two session results yet/);
+test("result watch resolves a named group to distinct exact running IDs", async () => {
+  const { router, setRows, calls } = setup();
+  const watched = [];
+  router.dependencies = { addResultWatch: async item => watched.push(item) };
+  const sanji = { threadId: "1554149594718281869", tag: "sanji", name: "Sanji",
+    state: "running", closed: false };
+  setRows([{ ...zoro, state: "running" }, sanji, franky]);
+  assert.match(await router.handle("When Zoro, Sanji, and Frankie finish, tell me what I can test",
+    { speakerId: ownerId }), /watch 3 sessions/);
+  assert.deepEqual(watched[0].sources.map(s => s.threadId),
+    [zoro.threadId, sanji.threadId, franky.threadId]);
   assert.equal(calls.length, 0);
+  assert.match(await router.handle("When all currently running sessions finish, tell me what I can test",
+    { speakerId: ownerId }), /watch 3 sessions/);
+  assert.equal(watched[1].sources.length, 3);
+});
+
+test("a session finishing during result-watch setup cannot leave a stale watch", async () => {
+  const { router, client, setRows } = setup();
+  const watched = [];
+  router.dependencies = { addResultWatch: async item => watched.push(item) };
+  setRows([{ ...zoro, state: "running" }, franky]);
+  const original = client.snapshot;
+  let reads = 0;
+  client.snapshot = async () => {
+    const rows = await original();
+    return ++reads >= 1 ? rows.map(s => s.threadId === zoro.threadId ?
+      { ...s, state: "history" } : s) : rows;
+  };
+  assert.match(await router.handle("When Zoro and Frankie finish, tell me what I can test",
+    { speakerId: ownerId }), /working sessions changed/);
+  assert.equal(watched.length, 0);
+});
+
+test("one result request can track a dozen sessions without a two-session cap", async () => {
+  const { router, setRows } = setup();
+  const watched = [];
+  router.dependencies = { addResultWatch: async item => watched.push(item) };
+  const rows = Array.from({ length: 12 }, (_, i) => ({
+    threadId: String(1554149594718281869n + BigInt(i)), tag: `tag${i + 1}`,
+    name: `Session ${i + 1}`, state: "running", closed: false,
+  }));
+  setRows(rows);
+  const names = rows.map(r => r.tag);
+  const sentence = `When ${names.slice(0, -1).join(", ")}, and ${names.at(-1)} finish, tell me what I can test`;
+  assert.match(await router.handle(sentence, { speakerId: ownerId }), /watch 12 sessions/);
+  assert.deepEqual(watched[0].sources.map(s => s.threadId), rows.map(r => r.threadId));
 });
 
 test("a just-listen or correction arriving during resolution cancels the pending action", async () => {

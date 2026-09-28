@@ -10,7 +10,16 @@ const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(c
 const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
 const HISTORY = /^(?:find|look up|search for)(?: the)? (?:session|thread)(?: where we| that| about| for)? (.+?)[?.!]*$/iu;
 const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|completes)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
-const WHEN_BOTH = new RegExp(`^(?:when|after)\\s+(?:both\\s+)?${NAME}\\s+and\\s+${NAME}\\s+(?:finish|are done|complete)\\b`, "iu");
+const WHEN_RESULTS = /^(?:when|after)\s+(.+?)\s+(?:finish|finishes|are done|is done|complete|completes)[,;:]?\s+(?:tell|show|give)\s+me\s+(?:what\s+(?:i|we)\s+can\s+test|(?:the\s+)?test(?:ing)?\s+(?:ideas|steps|suggestions))[?.!]*$/iu;
+const ALL_RUNNING = /^(?:all\s+(?:(?:of\s+)?(?:the\s+)?|my\s+)?(?:currently\s+)?(?:running|active|working)\s+sessions?|everyone\s+working)$/iu;
+
+function resultTargets(raw) {
+  const names = raw.trim().replace(/^both\s+/iu, "");
+  if (ALL_RUNNING.test(names)) return { selection: "running", targets: [] };
+  const targets = names.split(/\s*,\s*(?:and\s+)?|\s+and\s+/iu).map(name => name.trim());
+  if (!targets.length || targets.some(name => !/^[\p{L}][\p{L}\p{N}'-]*$/u.test(name))) return null;
+  return { selection: "named", targets };
+}
 
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw, { knownTags = null } = {}) {
@@ -31,7 +40,12 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   if (history) return { kind: "history", query: history[1].trim().replace(/^(?:worked on|talked about|did)\s+/iu, "") };
   const when = WHEN.exec(text);
   if (when) return { kind: "dependency", source: when[1], target: when[2], instruction: when[3].trim() };
-  if (WHEN_BOTH.test(text)) return { kind: "unsupported", reason: "combined-results" };
+  const results = WHEN_RESULTS.exec(text);
+  if (results) {
+    const parsed = resultTargets(results[1]);
+    return parsed ? { kind: "result-watch", ...parsed } :
+      { kind: "clarify", reason: "result-targets" };
+  }
 
   const explicit = TELL.exec(text);
   const direct = explicit ? null : DIRECT.exec(text);

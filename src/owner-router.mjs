@@ -58,9 +58,6 @@ export class OwnerRouter {
     const intent = parseOwnerIntent(text);
     if (!intent) return null;
     if (intent.kind === "clarify") return "Please say the final task once more so I send the right words.";
-    if (intent.kind === "unsupported" && intent.reason === "combined-results") {
-      return "I can't combine two session results yet, so I won't promise a test list. I can tell you when one session finishes.";
-    }
     if (intent.kind === "status-all") {
       const sessions = (await this.client.snapshot()).filter(s => !s.closed && s.state === "running");
       if (!sessions.length) return "No EBI sessions are running right now.";
@@ -82,6 +79,48 @@ export class OwnerRouter {
         } catch { /* The voice answer still tells Drew what was found. */ }
       }
       return `I found the ${item.name || intent.query} session, but couldn't post its link.`;
+    }
+    if (intent.kind === "result-watch") {
+      if (!this.dependencies?.addResultWatch) return "I can't watch session results right now.";
+      let sources;
+      if (intent.selection === "running") {
+        sources = (await this.client.snapshot()).filter(s => !s.closed &&
+          ["running", "queued"].includes(s.state)).map(s => ({
+          threadId: s.threadId, label: s.tag || s.name || "session",
+        }));
+      } else {
+        const resolved = await Promise.all(intent.targets.map(name => this.client.resolveTag(name)));
+        sources = [];
+        for (let i = 0; i < intent.targets.length; i += 1) {
+          const name = intent.targets[i];
+          const found = resolved[i];
+          if (found.kind !== "found") return `I couldn't identify ${name} exactly. Please use its current tag.`;
+          if (!["running", "queued"].includes(found.session.state)) {
+            return `${found.session.tag || name} isn't working on a turn right now.`;
+          }
+          if (sources.some(s => s.threadId === found.session.threadId)) {
+            return "Two names point to the same session. Please name each session once.";
+          }
+          sources.push({ threadId: found.session.threadId,
+            label: found.session.tag || found.session.name || name });
+        }
+        const still = await Promise.all(sources.map((source, i) =>
+          this.#stillTarget(intent.targets[i], { threadId: source.threadId }, false)));
+        if (still.some(value => !value)) {
+          return "A session tag changed while I was checking. Please say the request again.";
+        }
+      }
+      if (!sources.length) return "No sessions are working on a turn right now.";
+      const current = (await this.client.snapshot()).filter(s => !s.closed &&
+        ["running", "queued"].includes(s.state));
+      const currentIds = new Set(current.map(s => s.threadId));
+      if (sources.some(s => !currentIds.has(s.threadId)) ||
+          (intent.selection === "running" && currentIds.size !== sources.length)) {
+        return "The working sessions changed while I was checking. Please say the request again.";
+      }
+      if (!shouldAct()) return null;
+      await this.dependencies.addResultWatch({ sources });
+      return `I'll watch ${sources.length} ${sources.length === 1 ? "session" : "sessions"} and check their final replies for test steps.`;
     }
     if (intent.kind === "dependency") {
       if (!this.dependencies) return "Follow-on tasks are unavailable right now.";

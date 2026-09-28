@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { buildResultReport } from "./result-report.mjs";
 
 const utcNow = () => new Date().toISOString().replace("Z", "+00:00");
 
@@ -9,7 +10,7 @@ const utcNow = () => new Date().toISOString().replace("Z", "+00:00");
 export class EventWatcher {
   constructor({ client, conversation, presence, file = join(homedir(), ".local/share/jester-voice/events.json"),
     logger = console, now = () => Date.now(), intervalMs = 3_000,
-    dependencies = null } = {}) {
+    dependencies = null, postResults = null } = {}) {
     this.client = client;
     this.conversation = conversation;
     this.presence = presence;
@@ -18,6 +19,7 @@ export class EventWatcher {
     this.now = now;
     this.intervalMs = intervalMs;
     this.dependencies = dependencies;
+    this.postResults = postResults;
     this.state = null;
     this.timer = null;
     this.running = false;
@@ -84,13 +86,20 @@ export class EventWatcher {
     }
     if (turn.state === "accepted") {
       this.#notice(`${turn.turn_key}:accepted`, turn.thread_id, "finished");
-      await this.dependencies?.accepted(turn.thread_id);
+      await this.dependencies?.accepted(turn.thread_id, turn);
     }
     else if (turn.parked || turn.state === "expired") {
       // The same logical turn can move from parked to expired. Keep one notice.
       const id = `${turn.turn_key}:failure`;
-      if (!this.state.seen.includes(id) && !this.state.pending.some(p => p.id === id)) {
-        this.state.pending.push({ id, threadId: turn.thread_id, due: this.now() + 5_000 });
+      const pending = this.state.pending.find(p => p.id === id);
+      if (pending && turn.state === "expired") {
+        pending.eventAt = turn.updated_at;
+        pending.terminal = true;
+        pending.due = this.now() + 5_000;
+      } else if (!pending && (turn.state === "expired" || !this.state.seen.includes(id))) {
+        this.state.pending.push({ id, threadId: turn.thread_id,
+          eventAt: turn.updated_at, terminal: turn.state === "expired",
+          due: this.now() + 5_000 });
       }
     }
   }
@@ -100,7 +109,9 @@ export class EventWatcher {
     for (const item of this.state.pending) {
       if (item.due <= this.now()) {
         this.#notice(item.id, item.threadId, "stopped or failed");
-        await this.dependencies?.failed(item.threadId);
+        await this.dependencies?.failed(item.threadId,
+          { updated_at: item.eventAt || "1970-01-01T00:00:00Z",
+            terminal: item.terminal === true });
       }
       else future.push(item);
     }
@@ -117,9 +128,15 @@ export class EventWatcher {
   }
 
   async #flush() {
-    if (!this.state.notices.length || !this.presence.inPresence || !this.presence.joined ||
+    if (!this.presence.inPresence || !this.presence.joined ||
         this.presence.paused || this.conversation.mode !== "conversation") return;
     if (this.conversation.turn || this.conversation.reply) return;
+    const watch = this.dependencies?.readyResultWatches?.()[0];
+    if (watch) {
+      if (this.now() - watch.readyAt >= 2_000) await this.#flushResults(watch);
+      return;
+    }
+    if (!this.state.notices.length) return;
     const ready = this.state.notices.filter(n => n.kind !== "finished" ||
       this.now() - n.at >= 2_000).slice(0, 6);
     if (!ready.length) return;
@@ -137,6 +154,45 @@ export class EventWatcher {
     if (this.conversation.announce(spoken)) {
       const delivered = new Set(ready.map(n => n.id));
       this.state.notices = this.state.notices.filter(n => !delivered.has(n.id));
+    }
+  }
+
+  async #flushResults(watch) {
+    let report = null;
+    if (!watch.reportPosted && !watch.reportUnavailable) {
+      const responses = new Map();
+      for (let i = 0; i < watch.sources.length; i += 5) {
+        const batch = watch.sources.slice(i, i + 5);
+        await Promise.all(batch.map(async source => {
+          if (watch.completed[source.threadId]?.status !== "accepted") return;
+          try { responses.set(source.threadId,
+            { messages: await this.client.threadMessages(source.threadId) }); }
+          catch (error) { responses.set(source.threadId, { error: error.message }); }
+        }));
+      }
+      report = buildResultReport(watch, responses);
+      if (report.missingReplies && this.now() - watch.readyAt < 30_000) return;
+    }
+    if (watch.status !== "ready" || this.conversation.mode !== "conversation" ||
+        this.conversation.turn || this.conversation.reply || !this.presence.inPresence ||
+        !this.presence.joined || this.presence.paused) return;
+    if (!watch.reportPosted && !watch.reportUnavailable) {
+      try {
+        if (!this.postResults) throw new Error("Auto Transcripts result posting is unavailable");
+        await this.postResults(report.markdown, watch.id);
+        if (!(await this.dependencies.markReportPosted(watch.id, report.spoken))) return;
+      } catch (error) {
+        if (this.now() - watch.readyAt < 30_000) throw error;
+        this.logger.warn?.("[events] result post unavailable:", error.message);
+        if (!(await this.dependencies.markReportUnavailable(watch.id))) return;
+      }
+    }
+    if (this.conversation.announce(watch.reportSpoken || report?.spoken ||
+        "I posted the watched session results in Auto Transcripts.")) {
+      if (await this.dependencies.markResultsDelivered(watch.id)) {
+        const ids = new Set(watch.sources.map(s => s.threadId));
+        this.state.notices = this.state.notices.filter(n => !ids.has(n.threadId));
+      }
     }
   }
 

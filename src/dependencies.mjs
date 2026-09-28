@@ -43,7 +43,42 @@ export class Dependencies {
     return item;
   }
 
-  async accepted(threadId) {
+  async addResultWatch({ sources }) {
+    if (!Array.isArray(sources) || !sources.length || sources.length > 100 ||
+        new Set(sources.map(s => s.threadId)).size !== sources.length ||
+        sources.some(s => typeof s.threadId !== "string" ||
+          !/^\d{17,20}$/.test(s.threadId) || typeof s.label !== "string" || !s.label.trim())) {
+      throw new Error("Invalid result watch targets");
+    }
+    const requested = sources.map(s => s.threadId).sort().join(",");
+    const existing = this.items.find(item => item.kind === "results" &&
+      ["pending", "ready"].includes(item.status) &&
+      item.sources.map(s => s.threadId).sort().join(",") === requested);
+    if (existing) return existing;
+    const item = { id: randomUUID(), kind: "results", sources: sources.map(s => ({
+      threadId: s.threadId, label: s.label.trim().replace(/\s+/gu, " ").slice(0, 80),
+    })), completed: {}, status: "pending", createdAt: new Date(this.now()).toISOString(),
+    readyAt: null, reportPosted: false };
+    this.items.push(item);
+    await this.#save();
+    return item;
+  }
+
+  async accepted(threadId, turn = null) {
+    let changed = false;
+    for (const item of this.items) {
+      if (item.kind !== "results" || item.status !== "pending" ||
+          !item.sources.some(s => s.threadId === threadId) || item.completed[threadId]) continue;
+      const eventAt = turn?.accepted_at || turn?.updated_at || new Date(this.now()).toISOString();
+      if (Date.parse(eventAt) < Date.parse(item.createdAt)) continue;
+      item.completed[threadId] = { status: "accepted", at: eventAt };
+      if (Object.keys(item.completed).length === item.sources.length) {
+        item.status = "ready";
+        item.readyAt = this.now();
+      }
+      changed = true;
+    }
+    if (changed) await this.#save();
     for (const item of this.items) {
       if (item.status !== "pending" || item.sourceId !== threadId) continue;
       // Persist dispatching before an external POST. Repeats use this one ID.
@@ -53,9 +88,21 @@ export class Dependencies {
     }
   }
 
-  async failed(threadId) {
+  async failed(threadId, turn = null) {
     let changed = false;
     for (const item of this.items) {
+      if (item.kind === "results" && item.status === "pending" && turn?.terminal === true &&
+          item.sources.some(s => s.threadId === threadId) && !item.completed[threadId]) {
+        const eventAt = turn?.updated_at || new Date(this.now()).toISOString();
+        if (Date.parse(eventAt) > Date.parse(item.createdAt)) {
+          item.completed[threadId] = { status: "failed", at: eventAt };
+          if (Object.keys(item.completed).length === item.sources.length) {
+            item.status = "ready";
+            item.readyAt = this.now();
+          }
+          changed = true;
+        }
+      }
       if (item.status === "pending" && item.sourceId === threadId) {
         item.status = "blocked";
         changed = true;
@@ -67,7 +114,7 @@ export class Dependencies {
   async cancelPending() {
     let changed = false;
     for (const item of this.items) {
-      if (item.status === "pending" || item.status === "dispatching") {
+      if (item.status === "pending" || item.status === "dispatching" || item.status === "ready") {
         item.status = "canceled";
         changed = true;
       }
@@ -81,6 +128,36 @@ export class Dependencies {
         await this.#dispatch(item);
       }
     }
+  }
+
+  readyResultWatches() {
+    return this.items.filter(item => item.kind === "results" && item.status === "ready");
+  }
+
+  async markReportPosted(id, spoken) {
+    const item = this.items.find(item => item.id === id && item.kind === "results");
+    if (!item || item.status !== "ready") return false;
+    item.reportPosted = true;
+    item.reportSpoken = String(spoken || "I posted the watched session results in Auto Transcripts.").slice(0, 1_500);
+    await this.#save();
+    return true;
+  }
+
+  async markReportUnavailable(id) {
+    const item = this.items.find(item => item.id === id && item.kind === "results");
+    if (!item || item.status !== "ready") return false;
+    item.reportUnavailable = true;
+    item.reportSpoken = `The ${item.sources.length} watched sessions finished, but I couldn't post their test details. Please check their threads.`;
+    await this.#save();
+    return true;
+  }
+
+  async markResultsDelivered(id) {
+    const item = this.items.find(item => item.id === id && item.kind === "results");
+    if (!item || item.status !== "ready" || (!item.reportPosted && !item.reportUnavailable)) return false;
+    item.status = "delivered";
+    await this.#save();
+    return true;
   }
 
   async #dispatch(item) {

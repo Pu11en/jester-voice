@@ -94,3 +94,17 @@ test("history accepts only exact string IDs, never rounded JSON numbers", async 
     json: async () => ({ results: [{ thread_id: 1554145503506333736 }] }) }) });
   await assert.rejects(unsafe.searchSessions("login"), /unsafe thread ID/);
 });
+
+test("reads bounded thread replies through the exact ID without trusting numeric JSON IDs", async () => {
+  const seen = [];
+  const client = new EbiClient({ fetchImpl: async url => {
+    seen.push(url);
+    return { ok: true, json: async () => ({ thread_id: 1554145503506333736,
+      messages: [{ is_bot: true, content: "- Open the page",
+        created_at: "2026-09-28T12:00:00Z", jump_url: "https://discord.com/channels/1/2/3" }] }) };
+  } });
+  const messages = await client.threadMessages("1554145503506333736", 20);
+  assert.equal(messages[0].content, "- Open the page");
+  assert.match(seen[0], /\/api\/threads\/1554145503506333736\/messages\?limit=20$/);
+  await assert.rejects(client.threadMessages("1554145503506333700", 101), /Invalid thread message request/);
+});

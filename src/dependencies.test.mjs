@@ -77,3 +77,60 @@ test("just-listen cancellation prevents a queued follow-on task", async () => {
     await deps.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("a named result group tracks every exact ID across restart and ignores older turns", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const file = join(dir, "dependencies.json");
+  const thirdId = "1554149594718281869";
+  let now = Date.parse("2026-09-28T12:00:00Z");
+  const client = { snapshot: async () => [] };
+  try {
+    const deps = new Dependencies({ client, ownerId, file, now: () => now });
+    await deps.start();
+    const sources = [
+      { threadId: sourceId, label: "zoro" },
+      { threadId: destinationId, label: "franky" },
+      { threadId: thirdId, label: "sanji" },
+    ];
+    const watch = await deps.addResultWatch({ sources });
+    assert.equal((await deps.addResultWatch({ sources: [...sources].reverse() })).id, watch.id);
+    await deps.accepted(sourceId, { accepted_at: "2026-09-28T11:59:59Z" });
+    assert.equal(deps.readyResultWatches().length, 0);
+    await deps.accepted(sourceId, { accepted_at: "2026-09-28T12:00:02Z" });
+    await deps.accepted(destinationId, { accepted_at: "2026-09-28T12:00:03Z" });
+    await deps.close();
+
+    const resumed = new Dependencies({ client, ownerId, file, now: () => now });
+    await resumed.start();
+    await resumed.failed(thirdId, { updated_at: "2026-09-28T12:00:04Z", terminal: false });
+    assert.equal(resumed.readyResultWatches().length, 0);
+    await resumed.accepted(thirdId, { accepted_at: "2026-09-28T12:00:05Z" });
+    const [ready] = resumed.readyResultWatches();
+    assert.deepEqual(Object.keys(ready.completed), [sourceId, destinationId, thirdId]);
+    assert.equal(ready.completed[thirdId].status, "accepted");
+    await resumed.markReportPosted(ready.id);
+    await resumed.markResultsDelivered(ready.id);
+    assert.equal(resumed.readyResultWatches().length, 0);
+    await resumed.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("a confirmed expiry is reported as failed only for its exact watched session", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const now = Date.parse("2026-09-28T12:00:00Z");
+  try {
+    const deps = new Dependencies({ client: {}, ownerId,
+      file: join(dir, "dependencies.json"), now: () => now });
+    await deps.start();
+    await deps.addResultWatch({ sources: [
+      { threadId: sourceId, label: "zoro" },
+      { threadId: destinationId, label: "franky" },
+    ] });
+    await deps.failed(sourceId, { updated_at: "2026-09-28T12:00:02Z", terminal: true });
+    await deps.accepted(destinationId, { accepted_at: "2026-09-28T12:00:03Z" });
+    const [ready] = deps.readyResultWatches();
+    assert.equal(ready.completed[sourceId].status, "failed");
+    assert.equal(ready.completed[destinationId].status, "accepted");
+    await deps.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

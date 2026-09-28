@@ -248,7 +248,7 @@ export class Conversation {
       parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) : null;
     if (intent) {
       await this.#abortDraft();
-      if (["message", "stop", "close", "runtime", "create", "dependency"].includes(intent.kind)) {
+      if (["message", "stop", "close", "runtime", "create", "dependency", "result-watch"].includes(intent.kind)) {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;

@@ -21,7 +21,11 @@ test("finds read-only status requests without treating a passing name as an acti
   assert.deepEqual(parseOwnerIntent("When Zoro finishes, tell Sanji to run tests"),
     { kind: "dependency", source: "Zoro", target: "Sanji", instruction: "run tests" });
   assert.deepEqual(parseOwnerIntent("When both Zoro and Sanji finish, tell me what I can test"),
-    { kind: "unsupported", reason: "combined-results" });
+    { kind: "result-watch", selection: "named", targets: ["Zoro", "Sanji"] });
+  assert.deepEqual(parseOwnerIntent("When Zoro, Sanji, and Frankie finish, tell me what I can test"),
+    { kind: "result-watch", selection: "named", targets: ["Zoro", "Sanji", "Frankie"] });
+  assert.deepEqual(parseOwnerIntent("When all currently running sessions finish, tell me what I can test"),
+    { kind: "result-watch", selection: "running", targets: [] });
 });
 
 test("final direct address and corrected destination yield one task draft", () => {

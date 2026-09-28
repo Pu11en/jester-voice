@@ -169,6 +169,21 @@ export class EbiClient {
     return result;
   }
 
+  async threadMessages(threadId, limit = 30) {
+    if (!THREAD_ID.test(threadId) || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("Invalid thread message request");
+    }
+    const result = await this.#request(`/api/threads/${threadId}/messages?limit=${limit}`,
+      { timeoutMs: 10_000 });
+    if (!Array.isArray(result.messages)) throw new Error("Invalid thread messages response");
+    return result.messages.map(message => ({
+      is_bot: message.is_bot === true,
+      content: String(message.content || ""),
+      created_at: String(message.created_at || ""),
+      jump_url: typeof message.jump_url === "string" ? message.jump_url : null,
+    }));
+  }
+
   async searchSessions(query) {
     if (!query?.trim() || query.length > 200) throw new Error("Invalid history query");
     const params = new URLSearchParams({ q: query.trim(), origin: "discord", limit: "10", body: "1" });
