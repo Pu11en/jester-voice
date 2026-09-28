@@ -67,7 +67,9 @@ export class Presence extends EventEmitter {
           return;
         }
         const channel = this.client.channels?.cache?.get(this.config.voiceChannelId)?.name || this.config.voiceChannelId;
-        await this.transcript?.start({ channel });
+        // A transport reconnect is still the same owner room presence. Keep
+        // its transcript and mode rather than splitting the room session.
+        if (!this.transcript?.path) await this.transcript?.start({ channel });
         await this.brain.prewarm();
       })
       .catch((error) => this.logger.warn?.("[presence] join:", error.message))

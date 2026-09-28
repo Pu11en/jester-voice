@@ -100,8 +100,14 @@ test("rejoins after voice transport failure only while the owner remains present
     async connect() { this.connects += 1; },
     disconnect() {},
   });
+  const transcript = {
+    starts: 0, path: null,
+    async start() { this.starts++; this.path = "/transcript/current.md"; },
+    async finish() { this.path = null; },
+  };
   const presence = new Presence({
     client, voice, brain: { async prewarm() {} },
+    transcript,
     config: { guildId: "guild", ownerId: "owner", voiceChannelId: "room", transcriptChannelId: "text" },
     logger: { warn() {} },
   });
@@ -110,6 +116,7 @@ test("rejoins after voice transport failure only while the owner remains present
   voice.emit("disconnect");
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.equal(voice.connects, 2);
+  assert.equal(transcript.starts, 1, "transport reconnect keeps the room transcript");
   voice.emit("disconnect");
   owner.voice.channelId = null;
   await new Promise((resolve) => setTimeout(resolve, 300));

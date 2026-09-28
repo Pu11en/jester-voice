@@ -193,6 +193,7 @@ export class Conversation {
     const requestedMode = modeCommand(event.text);
     if (requestedMode) {
       this.mode = requestedMode;
+      this.transcript?.setMode?.(requestedMode);
       this.attention.reset();
       if (this.reply) this.#stopReply();
       this.#stopLocalClip();

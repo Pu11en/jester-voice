@@ -14,7 +14,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export async function startApp({ config, createVoiceImpl = createVoice,
   createWorkerImpl = (options) => new WorkerClient(options),
   createBrainImpl = (options) => new Brain(options),
-  createTranscriptImpl = () => new RoomTranscript(),
+  createTranscriptImpl = (options) => new RoomTranscript(options),
   createPresenceImpl = (options) => new Presence(options),
   createConversationImpl = (options) => new Conversation(options),
 } = {}) {
@@ -31,7 +31,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
     worker.send({ op: "audio", speaker, pcm: pcm.toString("base64") });
   } });
   const brain = createBrainImpl({});
-  const transcript = createTranscriptImpl();
+  const transcript = createTranscriptImpl({ client: voice.client, channelId: config.transcriptChannelId });
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
   const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId, presence, transcript, stallClip, unavailableClip });
 
