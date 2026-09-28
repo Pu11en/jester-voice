@@ -26,6 +26,8 @@ The owner also wants an explicit **transcript-only mode**: `Jester, just listen`
 
 **Current build scope (owner update, 2026-09-28):** implement Drew's own conversation, transcript-only mode, room transcripts/privacy, and owner EBI session control first. Defer guest conversations, guest EBI control, and temporary permission grants to a later phase; do not ask Drew guest design questions during this build. Other people's speech may still be transcribed under the room-transcript policy, and the existing recording notice and anyone-can-Pause privacy control remain in scope. The earlier shared-room/guest sections below describe later capabilities, not current acceptance requirements. No timed overnight build is scheduled; work proceeds in small checked slices as soon as it is ready.
 
+**Owner live-check priority (2026-09-28):** interruption already works. Check A wake/follow-ups, B the exact spoken phrase `Jester just listen`, then C session tag recognition and navigation, especially `Frankie` for EBI's `franky` tag, status lookups, one faithful prompt to the exact thread, corrections, new-session creation, follow-up references, and verified outcomes. Test ambiguous/stale names and retries with fake EBI state before any harmless live prompt. The full owner check list is `LIVE-CHECK-jester-owner.md`.
+
 ## Mission
 
 Build a separate Discord voice bot/service called Jester that lets the owner operate and navigate the existing EBI/ccdb agent environment almost entirely by natural spoken conversation.
