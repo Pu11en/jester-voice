@@ -30,7 +30,7 @@ function mergeText(first, second) {
  * Worker contract: send({op, ...}); emit parsed messages on `event`.
  */
 export class Conversation {
-  constructor({ worker, brain, voice, ownerId, presence = null, stallClip = null,
+  constructor({ worker, brain, voice, ownerId, presence = null, transcript = null, stallClip = null,
     logFile = "logs/turns.jsonl", now = () => performance.now(), logger = console } = {}) {
     if (!worker || !brain || !voice || !ownerId) throw new Error("worker, brain, voice, and ownerId are required");
     this.worker = worker;
@@ -38,6 +38,7 @@ export class Conversation {
     this.voice = voice;
     this.ownerId = String(ownerId);
     this.presence = presence;
+    this.transcript = transcript;
     this.stallClip = stallClip;
     this.logFile = logFile;
     this.now = now;
@@ -83,6 +84,9 @@ export class Conversation {
   #event(event) {
     if (event?.ev === "audio_out") return this.#audioOut(event);
     if (event?.ev === "say_done") return this.#sayDone(event);
+    if (event?.ev === "turn_end" && event.text?.trim()) {
+      void this.transcript?.record(this.voice.displayName?.(event.speaker) || event.speaker, event.text);
+    }
     if (event?.speaker !== this.ownerId) return;
     if (event.ev === "pause") this.#pause(event);
     else if (event.ev === "speech_start") this.#speechStart();
@@ -112,6 +116,7 @@ export class Conversation {
       this.#stopReply();
       this.#interrupt("interrupt");
       const heard = heardWords(reply.text, this.voice.playedMs(reply.id));
+      if (heard) void this.transcript?.record("Jester", heard);
       if (heard) this.brain.injectContext(`Jester said (heard): ${heard}`);
       const bargeStopMs = this.now() - stopStarted;
       if (this.lastTimings) this.lastTimings.bargeInStopMs = bargeStopMs;
@@ -221,9 +226,11 @@ export class Conversation {
     if (!this.reply?.streamEnded) return;
     const done = this.reply;
     this.reply = null;
+    const heard = heardWords(done.text, this.voice.playedMs(done.id));
+    if (heard) void this.transcript?.record("Jester", heard);
     void this.#log({
       type: "turn",
-      heardText: heardWords(done.text, this.voice.playedMs(done.id)),
+      heardText: heard,
       timings: this.lastTimings,
       sttMs: done.turn.sttMs,
       utteranceMs: done.turn.utteranceMs,

@@ -8,7 +8,7 @@ import { Conversation, heardWords, mergeText } from "./conversation.mjs";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
-function setup({ answers = ["A reply."], presence = null } = {}) {
+function setup({ answers = ["A reply."], presence = null, transcript = null } = {}) {
   const worker = new EventEmitter();
   worker.sent = [];
   worker.send = (message) => worker.sent.push(message);
@@ -31,9 +31,10 @@ function setup({ answers = ["A reply."], presence = null } = {}) {
     play(id, stream) { this.played.push({ id, stream }); },
     stopNow() { this.stopped += 1; },
     playedMs() { return 600; },
+    displayName(id) { return id === "guest" ? "Guest Name" : id; },
   };
   const events = (ev, payload = {}) => worker.emit("event", { ev, speaker: "owner", ...payload });
-  return { worker, brain, voice, events, presence };
+  return { worker, brain, voice, events, presence, transcript };
 }
 
 async function withConversation(options, fn) {
@@ -110,5 +111,21 @@ test("addressed owner leave command is consumed by presence instead of sent to L
     await tick();
     assert.equal(left, 1);
     assert.deepEqual(brain.asks, []);
+  });
+});
+
+test("room transcript captures guest turns and only the heard part of Jester replies", async () => {
+  const transcript = { rows: [], record(...row) { this.rows.push(row); } };
+  await withConversation({ answers: ["One two three four five."], transcript }, async ({ events, worker }) => {
+    worker.emit("event", { ev: "turn_end", speaker: "guest", text: "A guest question." });
+    events("turn_end", { text: "Owner question?" });
+    await tick();
+    events("speech_start");
+    await tick();
+    assert.deepEqual(transcript.rows, [
+      ["Guest Name", "A guest question."],
+      ["owner", "Owner question?"],
+      ["Jester", "One"],
+    ]);
   });
 });

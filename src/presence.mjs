@@ -2,7 +2,7 @@ const LEAVE_PHRASE = /^\s*jester[\s,]+(?:leave|disconnect)\s*[.!?]*\s*$/i;
 
 /** Auto-join and owner escape hatches for one configured Discord voice room. */
 export class Presence {
-  constructor({ client, voice, brain, config, logger = console } = {}) {
+  constructor({ client, voice, brain, config, transcript = null, logger = console } = {}) {
     if (!client || !voice || !brain || !config) {
       throw new Error("client, voice, brain, and config are required");
     }
@@ -10,6 +10,7 @@ export class Presence {
     this.voice = voice;
     this.brain = brain;
     this.config = config;
+    this.transcript = transcript;
     this.logger = logger;
     this.inPresence = false;
     this.dismissed = false;
@@ -56,6 +57,8 @@ export class Presence {
           this.joined = false;
           return;
         }
+        const channel = this.client.channels?.cache?.get(this.config.voiceChannelId)?.name || this.config.voiceChannelId;
+        await this.transcript?.start({ channel });
         await this.brain.prewarm();
       })
       .catch((error) => this.logger.warn?.("[presence] join:", error.message))
@@ -68,6 +71,7 @@ export class Presence {
     if (this.joining) await this.joining;
     this.voice.disconnect();
     this.joined = false;
+    await this.transcript?.finish();
   }
 
   async #voiceState(state) {
@@ -83,6 +87,7 @@ export class Presence {
       if (this.joining) await this.joining;
       this.voice.disconnect();
       this.joined = false;
+      await this.transcript?.finish();
     } else if (!this.dismissed) {
       await this.join();
     }

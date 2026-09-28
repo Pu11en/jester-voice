@@ -60,7 +60,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - "Jester, leave" / "Jester, disconnect" (owner, clearly addressed; bare "leave"/"stop" must **not** trigger it) makes Jester leave and not auto-rejoin during this owner presence.
   - Text escape hatch: owner types `!jester leave` / `!jester join` in the transcript channel. Needs the `GuildMessages` + `MessageContent` intents; check that the bot already has them.
   - Prewarm the brain thread on join. Test the state machine with fakes.
-- [ ] **8. Room transcripts (replaces the old bot's).**
+- [x] **8. Room transcripts (replaces the old bot's).**
   - Write every speaker's `turn_end` text, plus Jester's *heard* replies, to `~/.local/share/drew-ai-voice-transcripts/runtime/transcripts/<session-id>.md`. Use the **exact** old format: header lines `- Session:`, `- Channel:`, `- Started:`, `- Ended:`, and lines `**HH:MM:SS — Name:** text` in UTC.
   - Use a new session id per voice presence.
   - Test: parse the output with `allwork`'s own regexes (`LINE_RE`, `STARTED_RE` from `~/main-projects/automate 247/allwork/transcript.py`). Guests are transcribed too, but not answered this phase.

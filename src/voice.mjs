@@ -219,6 +219,12 @@ export function createVoice({
     playedMs(id) {
       return played.playedMs(id);
     },
+    displayName(userId) {
+      const guild = client.guilds.cache.get(config.guildId);
+      const member = guild?.members.cache.get(String(userId));
+      if (String(userId) === String(client.user?.id)) return client.user?.username || "Jester";
+      return member?.displayName || member?.user?.username || client.users.cache.get(String(userId))?.username || String(userId);
+    },
     disconnect,
     async destroy() {
       disconnect();
