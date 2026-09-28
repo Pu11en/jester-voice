@@ -1,22 +1,69 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readFile, rm } from "node:fs/promises";
 import test from "node:test";
 import { Presence } from "./presence.mjs";
 
-function setup({ channelId = null, transcript = null } = {}) {
+function setup({ channelId = null, transcript = null, privacyFile = join(tmpdir(), `jester-privacy-${randomUUID()}.json`) } = {}) {
   const client = new EventEmitter();
   const member = { voice: { channelId } };
   client.guilds = { cache: new Map([["guild", { members: { cache: new Map([["owner", member]]) } }]]) };
-  const calls = { login: 0, connect: 0, disconnect: 0, prewarm: 0 };
+  const calls = { login: 0, connect: 0, disconnect: 0, prewarm: 0, paused: [] };
   const voice = {
     async login() { calls.login++; },
     async connect() { calls.connect++; },
     disconnect() { calls.disconnect++; },
+    setCapturePaused(paused) { calls.paused.push(paused); },
   };
   const brain = { async prewarm() { calls.prewarm++; } };
   const config = { guildId: "guild", ownerId: "owner", voiceChannelId: "room", transcriptChannelId: "text" };
-  return { client, member, calls, presence: new Presence({ client, voice, brain, config, transcript, logger: { warn() {} } }) };
+  return { client, member, calls, presence: new Presence({ client, voice, brain, config, transcript,
+    privacyFile, logger: { warn() {} } }) };
 }
+
+test("room member can pause; only Drew resumes; paused state survives restart", async () => {
+  const privacyFile = join(tmpdir(), `jester-privacy-${randomUUID()}.json`);
+  const { client, calls, presence } = setup({ channelId: "room", privacyFile });
+  const notices = [];
+  const notice = { async edit(payload) { notices.push(payload); return this; } };
+  client.channels = { cache: new Map([["text", { async send(payload) { notices.push(payload); return notice; } }]]) };
+  const guild = client.guilds.cache.get("guild");
+  guild.voiceStates = { cache: new Map([["guest", { channelId: "room" }]]) };
+  const replies = [];
+  const button = (id, user) => client.emit("interactionCreate", {
+    isButton: () => true, customId: id, guildId: "guild", channelId: "text",
+    user: { id: user }, reply: async (payload) => replies.push(payload.content),
+  });
+  try {
+    await presence.start();
+    button("jester:recording:pause", "guest");
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(presence.paused, true);
+    assert.equal(JSON.parse(await readFile(privacyFile, "utf8")).paused, true);
+    assert.ok(notices.some(payload => payload.content.includes("Recording is paused")));
+    button("jester:recording:resume", "guest");
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(presence.paused, true);
+    assert.match(replies.at(-1), /Only Drew/);
+    presence.stop();
+    const restarted = setup({ channelId: "room", privacyFile });
+    await restarted.presence.start();
+    assert.equal(restarted.presence.paused, true);
+    assert.deepEqual(restarted.calls.paused, [true]);
+    restarted.client.emit("interactionCreate", {
+      isButton: () => true, customId: "jester:recording:resume", guildId: "guild", channelId: "text",
+      user: { id: "owner" }, reply: async (payload) => replies.push(payload.content),
+    });
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(restarted.presence.paused, false);
+    assert.equal(JSON.parse(await readFile(privacyFile, "utf8")).paused, false);
+    restarted.presence.stop();
+    assert.equal(calls.paused.at(-1), true);
+  } finally { presence.stop(); await rm(privacyFile, { force: true }); }
+});
 
 test("joins and prewarms when owner arrives, leaves when owner leaves", async () => {
   const { client, calls, presence } = setup();
@@ -109,6 +156,7 @@ test("rejoins after voice transport failure only while the owner remains present
     client, voice, brain: { async prewarm() {} },
     transcript,
     config: { guildId: "guild", ownerId: "owner", voiceChannelId: "room", transcriptChannelId: "text" },
+    privacyFile: join(tmpdir(), `jester-privacy-${randomUUID()}.json`),
     logger: { warn() {} },
   });
   await presence.start();

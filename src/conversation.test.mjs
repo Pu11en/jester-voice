@@ -342,6 +342,26 @@ test("voice disconnect drops stale input, resets worker speech state, and aborts
   });
 });
 
+test("recording pause discards buffered speech from every speaker", async () => {
+  const presence = Object.assign(new EventEmitter(), { paused: false, handleOwnerTurn: async () => false });
+  const transcript = { rows: [], record(...row) { this.rows.push(row); } };
+  await withConversation({ presence, transcript }, async ({ events, worker, brain, voice, conversation }) => {
+    events("turn_end", { text: "Question?" });
+    await tick();
+    assert.ok(conversation.reply);
+    presence.paused = true;
+    presence.emit("capturePaused", ["owner", "guest"]);
+    assert.equal(conversation.reply, null);
+    assert.ok(voice.stopped > 0);
+    assert.ok(worker.sent.some(message => message.op === "reset" && message.speaker === "guest"));
+    worker.emit("event", { ev: "turn_end", speaker: "guest", text: "Private words" });
+    events("turn_end", { text: "Jester, private words" });
+    await tick();
+    assert.equal(brain.asks.length, 1);
+    assert.ok(!transcript.rows.some(([, text]) => text.includes("Private words")));
+  });
+});
+
 // Advance real production deadlines without sleeping or using any live providers.
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function slowBrain() {

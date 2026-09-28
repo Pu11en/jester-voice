@@ -65,6 +65,12 @@ export class Conversation {
     this.onEvent = (event) => this.#event(event);
     this.onWorkerFatal = (error) => this.#workerFailed(error);
     this.onVoiceDisconnect = () => this.#voiceDisconnected();
+    this.onCapturePaused = (speakers) => {
+      this.#voiceDisconnected();
+      for (const speaker of speakers || []) {
+        if (String(speaker) !== this.ownerId) this.worker.send({ op: "reset", speaker });
+      }
+    };
     this.onPresenceReset = (reason) => {
       if (reason === "owner_departed" || reason === "owner_leave") this.mode = "conversation";
       this.#voiceDisconnected();
@@ -96,6 +102,7 @@ export class Conversation {
     this.worker.on("fatal", this.onWorkerFatal);
     this.voice.on?.("disconnect", this.onVoiceDisconnect);
     this.presence?.on?.("reset", this.onPresenceReset);
+    this.presence?.on?.("capturePaused", this.onCapturePaused);
     this.brain.on("firstWord", this.onBrainFirstWord);
     this.brain.on("fatal", this.onBrainFatal);
     this.voice.player?.on("stateChange", this.onPlayerState);
@@ -111,6 +118,7 @@ export class Conversation {
     this.worker.off("fatal", this.onWorkerFatal);
     this.voice.off?.("disconnect", this.onVoiceDisconnect);
     this.presence?.off?.("reset", this.onPresenceReset);
+    this.presence?.off?.("capturePaused", this.onCapturePaused);
     this.brain.off("firstWord", this.onBrainFirstWord);
     this.brain.off("fatal", this.onBrainFatal);
     this.voice.player?.off("stateChange", this.onPlayerState);
@@ -120,6 +128,7 @@ export class Conversation {
   }
 
   #event(event) {
+    if (this.presence?.paused) return;
     if (event?.ev === "audio_out") return this.#audioOut(event);
     if (event?.ev === "say_done") return this.#sayDone(event);
     if (event?.ev === "turn_end" && event.text?.trim()) {

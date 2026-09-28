@@ -137,23 +137,26 @@ export function createVoice({
     played.transition(oldState.status, newState.status);
   });
   const receivers = new Map();
+  const seenSpeakers = new Set();
   const events = new EventEmitter();
   let connection = null;
   let loggedIn = false;
   let connectionTimer = null;
   let intentionalDisconnect = false;
+  let capturePaused = false;
   let lastDecryptWarningAt = 0;
 
   function capture(userId) {
-    if (receivers.has(userId) || userId === client.user?.id) return;
+    if (capturePaused || receivers.has(userId) || userId === client.user?.id) return;
     const guild = client.guilds.cache.get(config.guildId);
     const member = guild?.members.cache.get(userId);
     if (member?.user?.bot || client.users.cache.get(userId)?.bot) return;
+    seenSpeakers.add(String(userId));
     const opus = connection.receiver.subscribe(userId, {
       end: { behavior: voice.EndBehaviorType.AfterSilence, duration: 1_000 },
     });
     const decoder = createDecoder();
-    const input = createPcmInput((pcm) => onAudio(userId, pcm));
+    const input = createPcmInput((pcm) => { if (!capturePaused) onAudio(userId, pcm); });
     let closed = false;
     const finish = () => {
       if (closed) return;
@@ -195,6 +198,16 @@ export function createVoice({
   return {
     client,
     player,
+    setCapturePaused(paused) {
+      capturePaused = Boolean(paused);
+      if (capturePaused) for (const { finish } of [...receivers.values()]) finish();
+      if (capturePaused) {
+        const speakers = [...seenSpeakers];
+        seenSpeakers.clear();
+        return speakers;
+      }
+      return [];
+    },
     async login() {
       if (!loggedIn) {
         const ready = new Promise((resolve, reject) => {
