@@ -13,6 +13,7 @@ import {
 import prism from "prism-media";
 import { Readable } from "node:stream";
 import { performance } from "node:perf_hooks";
+import { EventEmitter } from "node:events";
 
 const INPUT_RATE = 48_000;
 const OUTPUT_RATE = 16_000;
@@ -123,8 +124,11 @@ export function createVoice({
     played.transition(oldState.status, newState.status);
   });
   const receivers = new Map();
+  const events = new EventEmitter();
   let connection = null;
   let loggedIn = false;
+  let connectionTimer = null;
+  let intentionalDisconnect = false;
 
   function capture(userId) {
     if (receivers.has(userId) || userId === client.user?.id) return;
@@ -159,14 +163,19 @@ export function createVoice({
   }
 
   function disconnect() {
+    intentionalDisconnect = true;
+    clearTimeout(connectionTimer);
+    connectionTimer = null;
     for (const { finish } of [...receivers.values()]) finish();
     voiceConnectionDestroy();
     player.stop(true);
+    intentionalDisconnect = false;
   }
 
   function voiceConnectionDestroy() {
-    if (connection && connection.state.status !== voice.VoiceConnectionStatus.Destroyed) connection.destroy();
+    const oldConnection = connection;
     connection = null;
+    if (oldConnection && oldConnection.state.status !== voice.VoiceConnectionStatus.Destroyed) oldConnection.destroy();
   }
 
   return {
@@ -201,6 +210,24 @@ export function createVoice({
         }
       });
       connection.on("error", (error) => logger.warn?.("[voice] connection:", error.message));
+      const watchedConnection = connection;
+      connection.on("stateChange", (_oldState, newState) => {
+        if (connection !== watchedConnection) return;
+        if (![voice.VoiceConnectionStatus.Disconnected, voice.VoiceConnectionStatus.Destroyed].includes(newState.status) || intentionalDisconnect) return;
+        clearTimeout(connectionTimer);
+        connectionTimer = setTimeout(() => {
+          if (connection !== watchedConnection) return;
+          if (connection?.state.status !== voice.VoiceConnectionStatus.Ready &&
+              connection?.state.status !== voice.VoiceConnectionStatus.Destroyed) {
+            disconnect();
+            events.emit("disconnect");
+          } else if (connection?.state.status === voice.VoiceConnectionStatus.Destroyed) {
+            disconnect();
+            events.emit("disconnect");
+          }
+        }, newState.status === voice.VoiceConnectionStatus.Destroyed ? 0 : 5_000);
+        connectionTimer.unref?.();
+      });
       await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, 20_000);
       connection.subscribe(player);
       connection.receiver.speaking.on("start", capture);
@@ -231,5 +258,7 @@ export function createVoice({
       if (loggedIn) await client.destroy();
       loggedIn = false;
     },
+    on: (...args) => events.on(...args),
+    off: (...args) => events.off(...args),
   };
 }

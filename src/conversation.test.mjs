@@ -24,7 +24,7 @@ function setup({ answers = ["A reply."], presence = null, transcript = null } = 
   brain.interrupt = async () => { brain.interrupts += 1; };
   brain.injectContext = (text) => brain.context.push(text);
   const player = new EventEmitter();
-  const voice = {
+  const voice = Object.assign(new EventEmitter(), {
     player,
     played: [],
     stopped: 0,
@@ -32,7 +32,8 @@ function setup({ answers = ["A reply."], presence = null, transcript = null } = 
     stopNow() { this.stopped += 1; },
     playedMs() { return 600; },
     displayName(id) { return id === "guest" ? "Guest Name" : id; },
-  };
+  });
+  worker.dropQueuedAudio = (speaker, keep) => { worker.dropped = [speaker, keep]; };
   const events = (ev, payload = {}) => worker.emit("event", { ev, speaker: "owner", ...payload });
   return { worker, brain, voice, events, presence, transcript };
 }
@@ -127,5 +128,17 @@ test("room transcript captures guest turns and only the heard part of Jester rep
       ["owner", "Owner question?"],
       ["Jester", "One"],
     ]);
+  });
+});
+
+test("voice disconnect drops stale input, resets worker speech state, and aborts the current reply", async () => {
+  await withConversation({}, async ({ events, voice, worker, conversation }) => {
+    events("turn_end", { text: "Question?" });
+    await tick();
+    assert.ok(conversation.reply);
+    voice.emit("disconnect");
+    assert.equal(conversation.reply, null);
+    assert.deepEqual(worker.dropped, ["owner", 0]);
+    assert.ok(worker.sent.some((message) => message.op === "reset" && message.speaker === "owner"));
   });
 });

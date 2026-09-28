@@ -1,7 +1,11 @@
-import { mkdir, appendFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { PassThrough } from "node:stream";
 import { performance } from "node:perf_hooks";
+import { appendBounded } from "./bounded-log.mjs";
+
+const MAX_PENDING_TTS_BYTES = 8 * 1024 * 1024;
+const MAX_TURN_LOG_BYTES = 10 * 1024 * 1024;
 
 const heardWords = (text, playedMs) => {
   const words = text.trim().split(/\s+/).filter(Boolean);
@@ -49,7 +53,10 @@ export class Conversation {
     this.replyNumber = 0;
     this.lastTimings = null;
     this.interrupting = Promise.resolve();
+    this.logQueue = Promise.resolve();
     this.onEvent = (event) => this.#event(event);
+    this.onWorkerFatal = (error) => this.#workerFailed(error);
+    this.onVoiceDisconnect = () => this.#voiceDisconnected();
     this.onBrainThinking = (event) => this.#thinking(event);
     this.onBrainFirstWord = (event) => {
       if (this.turn && (!event.speaker || event.speaker === this.ownerId)) {
@@ -65,6 +72,8 @@ export class Conversation {
     if (this.started) return;
     this.started = true;
     this.worker.on("event", this.onEvent);
+    this.worker.on("fatal", this.onWorkerFatal);
+    this.voice.on?.("disconnect", this.onVoiceDisconnect);
     this.brain.on("thinking", this.onBrainThinking);
     this.brain.on("firstWord", this.onBrainFirstWord);
     this.voice.player?.on("stateChange", this.onPlayerState);
@@ -74,6 +83,8 @@ export class Conversation {
     if (!this.started) return;
     this.started = false;
     this.worker.off("event", this.onEvent);
+    this.worker.off("fatal", this.onWorkerFatal);
+    this.voice.off?.("disconnect", this.onVoiceDisconnect);
     this.brain.off("thinking", this.onBrainThinking);
     this.brain.off("firstWord", this.onBrainFirstWord);
     this.voice.player?.off("stateChange", this.onPlayerState);
@@ -123,6 +134,7 @@ export class Conversation {
       void this.#log({ type: "barge_in", heard, bargeStopMs,
         timings: this.lastTimings ? { ...this.lastTimings } : null });
     }
+    this.worker.dropQueuedAudio?.(this.ownerId, 24);
     if (this.turn && !this.turn.accepted) {
       const turn = this.turn;
       turn.resumed = true;
@@ -213,6 +225,13 @@ export class Conversation {
       this.lastTimings.ttsFirstChunkMs = this.reply.turn.firstAudioAt - this.reply.startedAt;
     }
     this.reply.bytes += pcm.length;
+    if (this.reply.bytes - this.voice.playedMs(this.reply.id) * 192 > MAX_PENDING_TTS_BYTES) {
+      this.logger.warn?.("[conversation] dropping TTS reply after output backlog exceeded limit");
+      this.#stopReply();
+      void this.#interrupt("TTS backlog interrupt");
+      this.turn = null;
+      return;
+    }
     this.reply.stream.write(pcm);
   }
 
@@ -247,6 +266,21 @@ export class Conversation {
     reply.stream.destroy();
   }
 
+  #workerFailed(error) {
+    this.logger.warn?.("[conversation] speech worker restarted after failure:", error.message);
+    if (this.reply) this.#stopReply();
+    this.turn = null;
+    this.#interrupt("worker failure");
+  }
+
+  #voiceDisconnected() {
+    if (this.reply) this.#stopReply();
+    this.worker.dropQueuedAudio?.(this.ownerId, 0);
+    this.worker.send({ op: "reset", speaker: this.ownerId });
+    this.turn = null;
+    this.#interrupt("voice disconnect");
+  }
+
   #interrupt(label) {
     this.interrupting = Promise.resolve(this.brain.interrupt()).catch((error) => {
       this.logger.warn?.(`[conversation] ${label}:`, error.message);
@@ -266,12 +300,15 @@ export class Conversation {
   }
 
   async #log(entry) {
-    try {
-      await mkdir(dirname(this.logFile), { recursive: true });
-      await appendFile(this.logFile, `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
-    } catch (error) {
-      this.logger.warn?.("[conversation] turn log:", error.message);
-    }
+    this.logQueue = this.logQueue.then(async () => {
+      try {
+        await mkdir(dirname(this.logFile), { recursive: true });
+        await appendBounded(this.logFile, `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`, MAX_TURN_LOG_BYTES);
+      } catch (error) {
+        this.logger.warn?.("[conversation] turn log:", error.message);
+      }
+    });
+    return this.logQueue;
   }
 }
 

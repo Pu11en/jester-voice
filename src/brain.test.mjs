@@ -9,6 +9,7 @@ const makeBrain = (options = {}) => new Brain({
   command: fakeServer,
   args: [],
   requestTimeoutMs: 2_000,
+  turnTimeoutMs: 2_000,
   ...options,
 });
 
@@ -63,6 +64,21 @@ test("interrupt stops the active turn and drops its unfinished sentence", async 
     assert.equal(await brain.interrupt(), true);
     assert.deepEqual(await iterator.next(), { value: undefined, done: true });
     assert.equal(await brain.interrupt(), false);
+  } finally {
+    await brain.close();
+  }
+});
+
+test("a hung turn kills the stale app-server and the next owner turn starts cleanly", async () => {
+  const brain = makeBrain({ turnTimeoutMs: 30, restartBaseMs: 1, restartMaxMs: 2 });
+  try {
+    await assert.rejects(async () => {
+      for await (const _sentence of brain.ask("hang forever")) { /* drain */ }
+    }, /timed out/);
+    assert.equal(brain.child, null);
+    const sentences = [];
+    for await (const sentence of brain.ask("next turn")) sentences.push(sentence);
+    assert.deepEqual(sentences, ["Hello there.", "How can I help?"]);
   } finally {
     await brain.close();
   }

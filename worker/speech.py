@@ -26,6 +26,7 @@ import numpy as np
 SAMPLE_RATE = 16_000
 FRAME_SAMPLES = 512  # Silero v5's 32 ms frame at 16 kHz.
 FRAME_BYTES = FRAME_SAMPLES * 2
+MAX_UTTERANCE_FRAMES = 60 * SAMPLE_RATE // FRAME_SAMPLES
 VAD_START_THRESHOLD = 0.5
 VAD_CONTINUE_THRESHOLD = 0.35
 PAUSE_MS = 200
@@ -328,6 +329,8 @@ class SpeechPipeline:
                 continue
 
             state.audio.append(frame)
+            if len(state.audio) > MAX_UTTERANCE_FRAMES:
+                del state.audio[:len(state.audio) - MAX_UTTERANCE_FRAMES]
             if probability >= VAD_START_THRESHOLD:
                 state.silence_frames = 0
                 state.silence_started = None
@@ -402,11 +405,14 @@ def main() -> None:
     speech = SpeechWorker(pipeline, KokoroTTS(models), _emit)
     print(f"Jester speech models ready; Parakeet GPU arena cap={PARAKEET_GPU_MEM_LIMIT} bytes; "
           f"{_vram_usage()} after model load (startup peak snapshot)", file=sys.stderr, flush=True)
+    _emit({"ev": "ready"})
     for line in sys.stdin:
         try:
             message = json.loads(line)
             operation = message.get("op")
-            if operation == "say":
+            if operation == "ping":
+                _emit({"ev": "pong", "id": str(message.get("id", ""))})
+            elif operation == "say":
                 identifier = str(message.get("id", ""))
                 if not identifier:
                     raise ValueError("id is required")

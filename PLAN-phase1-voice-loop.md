@@ -64,7 +64,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - Write every speaker's `turn_end` text, plus Jester's *heard* replies, to `~/.local/share/drew-ai-voice-transcripts/runtime/transcripts/<session-id>.md`. Use the **exact** old format: header lines `- Session:`, `- Channel:`, `- Started:`, `- Ended:`, and lines `**HH:MM:SS — Name:** text` in UTC.
   - Use a new session id per voice presence.
   - Test: parse the output with `allwork`'s own regexes (`LINE_RE`, `STARTED_RE` from `~/main-projects/automate 247/allwork/transcript.py`). Guests are transcribed too, but not answered this phase.
-- [ ] **9. Recover from failures during a long voice session.**
+- [x] **9. Recover from failures during a long voice session.**
   - If the Python worker or Codex app-server exits or stops responding, terminate the stale process, restart with a short bounded backoff, and let the next owner turn work. Do not replay an interrupted reply or send duplicate speech.
   - If Discord voice disconnects, reconnect and rejoin only when the owner is still in the configured room and has not said "Jester, leave". Clean up subscriptions and audio streams after each disconnect.
   - Bound queued input audio, pending TTS chunks, and log growth so a long session cannot consume memory or disk without limit. Drop stale audio after a disconnect or barge-in.

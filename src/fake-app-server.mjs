@@ -25,6 +25,7 @@ input.on("line", (line) => {
     const turnId = `fake-turn-${turnNumber}`;
     const text = message.params.input.map((item) => item.text).join("\n");
     reply(message.id, { turn: { id: turnId } });
+    if (text.includes("hang forever")) return;
     const emit = (delta, delay) => setTimeout(() => notice("item/agentMessage/delta", {
       threadId: "fake-thread", turnId, delta,
     }), delay);

@@ -1,7 +1,11 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
+import { appendBounded } from "./bounded-log.mjs";
+
+const MAX_TRANSCRIPT_BYTES = 5 * 1024 * 1024;
+const TRANSCRIPT_HEADER_LINES = 7;
 
 const clock = (date) => date.toISOString().slice(11, 19);
 
@@ -40,7 +44,7 @@ export class RoomTranscript {
     if (!this.path || !String(text || "").trim()) return Promise.resolve(false);
     const line = `**${clock(at)} — ${String(speaker || "Unknown").replace(/[\r\n]/g, " ")}:** ${String(text).trim().replace(/[\r\n]+/g, " ")}\n`;
     const path = this.path;
-    this.queue = this.queue.then(() => appendFile(path, line, "utf8")).catch((error) => {
+    this.queue = this.queue.then(() => appendBounded(path, line, MAX_TRANSCRIPT_BYTES, TRANSCRIPT_HEADER_LINES)).catch((error) => {
       this.logger.warn?.("[transcript] append:", error.message);
     });
     return this.queue.then(() => true);

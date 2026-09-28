@@ -32,6 +32,9 @@ export class Brain extends EventEmitter {
     effort = "low",
     cwd = "/tmp",
     requestTimeoutMs = 60_000,
+    turnTimeoutMs = 60_000,
+    restartBaseMs = 250,
+    restartMaxMs = 5_000,
     stallMs = 2_500,
     spawnProcess = spawn,
   } = {}) {
@@ -42,6 +45,9 @@ export class Brain extends EventEmitter {
     this.effort = effort;
     this.cwd = cwd;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.turnTimeoutMs = turnTimeoutMs;
+    this.restartBaseMs = restartBaseMs;
+    this.restartMaxMs = restartMaxMs;
     this.stallMs = stallMs;
     this.spawnProcess = spawnProcess;
     this.child = null;
@@ -52,6 +58,8 @@ export class Brain extends EventEmitter {
     this.activeTurn = null;
     this.starting = null;
     this.closed = false;
+    this.failures = 0;
+    this.lastFailureAt = 0;
   }
 
   async prewarm() {
@@ -67,14 +75,18 @@ export class Brain extends EventEmitter {
   }
 
   async #start() {
+    const backoff = Math.min(this.restartMaxMs, this.restartBaseMs * (2 ** Math.max(0, this.failures - 1)));
+    const wait = backoff - (Date.now() - this.lastFailureAt);
+    if (this.failures && wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    if (this.closed) throw new Error("Brain is closed");
     const child = this.spawnProcess(this.command, ["app-server", ...this.args], {
       cwd: this.cwd,
       stdio: ["pipe", "pipe", "ignore"],
     });
     this.child = child;
-    child.once("error", (error) => this.#fail(error));
+    child.once("error", (error) => this.#fail(error, child));
     child.once("exit", (code, signal) => {
-      if (!this.closed) this.#fail(new Error(`Codex app-server exited (${code ?? signal})`));
+      if (!this.closed) this.#fail(new Error(`Codex app-server exited (${code ?? signal})`), child);
     });
     const lines = createInterface({ input: child.stdout });
       lines.on("line", (line) => {
@@ -113,6 +125,7 @@ export class Brain extends EventEmitter {
     });
     this.threadId = started?.thread?.id;
     if (!this.threadId) throw new Error("Codex app-server did not return a thread id");
+    this.failures = 0;
     return this.threadId;
   }
 
@@ -149,6 +162,7 @@ export class Brain extends EventEmitter {
       if (!firstWord && this.activeTurn === state) this.emit("thinking", { threadId, speaker });
     }, this.stallMs);
     stallTimer.unref?.();
+    let turnTimer = null;
     try {
       const started = await this.#request("turn/start", {
         threadId,
@@ -158,6 +172,8 @@ export class Brain extends EventEmitter {
       state.turnId = started?.turn?.id;
       if (!state.turnId) throw new Error("Codex app-server did not return a turn id");
       let remainder = "";
+      turnTimer = setTimeout(() => this.#fail(new Error("Codex app-server turn timed out"), this.child), this.turnTimeoutMs);
+      turnTimer.unref?.();
       while (true) {
         if (!notifications.length) await new Promise((resolve) => { wake = resolve; });
         wake = null;
@@ -180,6 +196,8 @@ export class Brain extends EventEmitter {
               if (sentence) yield sentence;
             }
           } else if (message.method === "turn/completed") {
+            clearTimeout(turnTimer);
+            this.failures = 0;
             if (!state.interrupted && remainder.trim()) yield remainder.trim();
             return;
           } else if (message.method === "error") {
@@ -189,6 +207,7 @@ export class Brain extends EventEmitter {
       }
     } finally {
       clearTimeout(stallTimer);
+      if (turnTimer) clearTimeout(turnTimer);
       this.off("notification", onNotification);
       this.off("fatal", onFatal);
       if (this.activeTurn === state) this.activeTurn = null;
@@ -229,8 +248,7 @@ export class Brain extends EventEmitter {
     const message = { jsonrpc: "2.0", id, method, params };
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Codex app-server timed out calling ${method}`));
+        this.#fail(new Error(`Codex app-server timed out calling ${method}`), this.child);
       }, this.requestTimeoutMs);
       timer.unref?.();
       this.pending.set(id, { resolve, reject, timer });
@@ -249,7 +267,16 @@ export class Brain extends EventEmitter {
     this.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
-  #fail(error) {
+  #fail(error, child = null) {
+    if (child && child !== this.child) return;
+    const failedChild = this.child;
+    this.child = null;
+    this.threadId = null;
+    if (!this.closed) {
+      this.failures += 1;
+      this.lastFailureAt = Date.now();
+    }
+    failedChild?.kill();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(error);

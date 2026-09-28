@@ -80,3 +80,30 @@ test("opens one transcript per owner voice presence and closes it on leave", asy
   assert.deepEqual(lifecycle, [["start", "room"], ["finish"]]);
   presence.stop();
 });
+
+test("rejoins after voice transport failure only while the owner remains present", async () => {
+  const client = new EventEmitter();
+  const owner = { voice: { channelId: "room" } };
+  client.guilds = { cache: new Map([["guild", { members: { cache: new Map([["owner", owner]]) } }]]) };
+  const voice = Object.assign(new EventEmitter(), {
+    connects: 0,
+    async login() {},
+    async connect() { this.connects += 1; },
+    disconnect() {},
+  });
+  const presence = new Presence({
+    client, voice, brain: { async prewarm() {} },
+    config: { guildId: "guild", ownerId: "owner", voiceChannelId: "room", transcriptChannelId: "text" },
+    logger: { warn() {} },
+  });
+  await presence.start();
+  assert.equal(voice.connects, 1);
+  voice.emit("disconnect");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(voice.connects, 2);
+  voice.emit("disconnect");
+  owner.voice.channelId = null;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(voice.connects, 2);
+  presence.stop();
+});

@@ -18,11 +18,15 @@ export class Presence {
     this.joining = null;
     this.onVoiceState = (_oldState, newState) => this.#voiceState(newState);
     this.onMessage = (message) => this.#message(message);
+    this.onVoiceDisconnect = () => { this.joined = false; this.#recoverVoice(); };
+    this.recoveryAttempt = 0;
+    this.recoveryTimer = null;
   }
 
   async start() {
     this.client.on("voiceStateUpdate", this.onVoiceState);
     this.client.on("messageCreate", this.onMessage);
+    this.voice.on?.("disconnect", this.onVoiceDisconnect);
     try {
       await this.voice.login();
       const guild = this.client.guilds.cache.get(this.config.guildId);
@@ -35,8 +39,11 @@ export class Presence {
   }
 
   stop() {
+    this.closed = true;
     this.client.off("voiceStateUpdate", this.onVoiceState);
     this.client.off("messageCreate", this.onMessage);
+    this.voice.off?.("disconnect", this.onVoiceDisconnect);
+    clearTimeout(this.recoveryTimer);
   }
 
   /** Consume a clearly addressed owner voice command before it reaches Luna. */
@@ -68,6 +75,7 @@ export class Presence {
 
   async leave() {
     this.dismissed = true;
+    clearTimeout(this.recoveryTimer);
     if (this.joining) await this.joining;
     this.voice.disconnect();
     this.joined = false;
@@ -84,6 +92,7 @@ export class Presence {
     this.inPresence = present;
     if (!present) {
       this.dismissed = false;
+      clearTimeout(this.recoveryTimer);
       if (this.joining) await this.joining;
       this.voice.disconnect();
       this.joined = false;
@@ -99,5 +108,23 @@ export class Presence {
     const command = message.content.trim().toLowerCase();
     if (command === "!jester leave") await this.leave();
     else if (command === "!jester join" && this.inPresence) await this.join();
+  }
+
+  #recoverVoice() {
+    if (!this.inPresence || this.dismissed || this.closed || this.recoveryAttempt >= 5) return;
+    const guild = this.client.guilds.cache.get(this.config.guildId);
+    const owner = guild?.members.cache.get(this.config.ownerId);
+    if (owner?.voice?.channelId !== this.config.voiceChannelId) return;
+    const delay = Math.min(5_000, 250 * (2 ** this.recoveryAttempt++));
+    this.recoveryTimer = setTimeout(async () => {
+      if (!this.inPresence || this.dismissed) return;
+      const currentGuild = this.client.guilds.cache.get(this.config.guildId);
+      const currentOwner = currentGuild?.members.cache.get(this.config.ownerId);
+      if (currentOwner?.voice?.channelId !== this.config.voiceChannelId) return;
+      await this.join();
+      if (!this.joined) this.#recoverVoice();
+      else this.recoveryAttempt = 0;
+    }, delay);
+    this.recoveryTimer.unref?.();
   }
 }
