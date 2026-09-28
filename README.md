@@ -12,16 +12,15 @@ Jester is a separate service. It does not replace EBI and it is not a rewrite of
 
 Jester joins the configured Discord room when the owner enters, listens and speaks through the local GPU speech worker, and uses the Codex app-server for replies. EBI session control is a separate Phase 2 plan.
 
-## Local owner trial
+## Use Jester now
 
-1. Install Node 22.12 or newer and run `npm ci` in this project.
-2. Copy `.env.example` to `.env`. The bot token and owner ID are read from the EBI env file; set the Discord room IDs in `.env` or use the old `VOICE_*` IDs from `~/.local/share/drew-ai-voice-transcripts/voice.env`.
-3. Check that the benchmark Python environment and speech models named in `.env.example` exist, and that the old voice bot is not connected to the room.
-4. Run `npm start`, then join the configured Discord voice room. Press Ctrl+C to stop Jester cleanly.
+As of 2026-09-28, `jester-voice.service` is enabled and running on Drew's computer. Join the configured Discord voice room; Jester auto-joins when the owner enters. Say "Jester, can you hear me?" and talk naturally. To make it leave for the rest of that visit, say "Jester, leave" or type `!jester leave` in the transcript channel. Type `!jester join` there to bring it back while you are in the room.
 
-The systemd unit in `deploy/jester-voice.service` is provided for a later owner-managed setup; it is not enabled by this build. Do not run Jester and the old voice bot in the same server voice room at once.
+Jester uses the existing DrewAI bot account, token and owner ID from the EBI env file. It reads room IDs from the old voice settings when no Jester `.env` is present. The old `drew-ai-voice-transcripts.service` is disabled and archived; do not run both voice services in the same server at once. The main EBI Discord bot still runs separately.
 
-Before relying on it, the owner still needs to try the local voice room and check conversational timing, barge-in, and Discord permissions. The automated check only syntax-checks the live smoke scripts; it never connects to Discord or calls the model.
+Manage Jester with `systemctl --user status|restart|stop jester-voice.service`; logs are in `journalctl --user -u jester-voice.service`. The source unit is `deploy/jester-voice.service` and the installed user unit is `~/.config/systemd/user/jester-voice.service`.
+
+The first real conversation still needs the owner's feel check for timing, barge-in and Discord permissions. Offline checks pass, and service startup loaded the speech models and connected to Discord. EBI session control is Phase 2.
 
 ## Design and references
 

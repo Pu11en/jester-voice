@@ -4,7 +4,7 @@
 
 This overrides HANDOFF.md's "Jester should not create a second permanent room-transcript system". There will be no first one anymore, so **Jester owns room transcripts**.
 
-Inventory taken read-only on 2026-09-27. On 2026-09-28, at the owner's request, the old `drew-ai-voice-transcripts.service` was stopped and disabled. Its unit was moved out of systemd's user unit directory, and the source and unit were saved under `~/.local/share/jester-voice/archive/old-drewai-voice-20260928-0604/`. The original source remains in the EBI checkout because that checkout has unrelated uncommitted changes. Existing transcript files remain in place. The main EBI Discord bot is still running; Jester has not been started. Automatic transcripts and the old spoken EBI commands are unavailable until a voice service is started again.
+Inventory taken read-only on 2026-09-27. On 2026-09-28, at the owner's request, the old `drew-ai-voice-transcripts.service` was stopped and disabled. Its unit was moved out of systemd's user unit directory, and the source and unit were saved under `~/.local/share/jester-voice/archive/old-drewai-voice-20260928-0604/`. The original source remains in the EBI checkout because that checkout has unrelated uncommitted changes. Existing transcript files remain in place. The main EBI Discord bot is still running. Jester's Phase 1 service was then enabled and started; it writes compatible transcript files, but the old spoken EBI commands remain unavailable until Phase 2.
 
 ## What the old bot does today
 
