@@ -1,0 +1,18 @@
+[Unit]
+Description=Jester local Discord voice assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=drewp
+WorkingDirectory=/home/drewp/main-projects/jester-voice
+Environment=PATH=/home/drewp/.local/node/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/drewp/.local/node/bin/npm start
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

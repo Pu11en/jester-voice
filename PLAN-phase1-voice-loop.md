@@ -20,56 +20,56 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
 
 ## Tasks
 
-- [ ] **1. Scaffold + check script.**
+- [x] **1. Scaffold + check script.**
   - Create `package.json`: Node ≥22.12, ESM, `node --test`, and dependencies `discord.js@14.27.0`, `@discordjs/voice@0.19.2`, `@discordjs/opus@0.10.0`, `prism-media@1.3.5`, `@snazzah/davey@0.1.12`. These are the versions proven in the old extension.
   - Create `src/config.mjs` (loads both env files, validates, never logs secrets), `worker/__init__.py`, `worker/tests/`, and `.env.example` with the variables above.
   - `scripts/check.sh`: `cd` to the repo, `npm ci --silent` if `node_modules` is missing, then `npm test --silent`, then `$JESTER_PYTHON -m pytest -q worker/tests` (install `pytest` into that venv if it's missing). It must pass in under 2 minutes, with one trivial test on each side.
   - Add `node_modules/` to `.gitignore` if it's missing.
-- [ ] **2. Speech worker: listening.**
+- [x] **2. Speech worker: listening.**
   - `worker/speech.py` reads JSON lines on stdin: `{"op":"audio","speaker":id,"pcm":b64}` (16 kHz mono s16, 32 ms frames) and `{"op":"reset","speaker":id}`.
   - Per speaker it runs Silero VAD (`$JESTER_MODELS_DIR/silero_vad.onnx`, 32 ms frames) and emits `speech_start`, then `pause` after 200 ms of silence.
   - At each pause it runs Smart Turn v3.2 GPU (**pad at the start**, keep the last 8 s) and Parakeet v2 GPU on the utterance. It emits `{"ev":"pause","speaker","prob","text"}`.
   - Turn end: prob > 0.5 means `turn_end` right away. Otherwise fall back after 1.8 s of silence, or after 7 s if prob < 0.05 and the last word is a connector (to/the/and/with/of/um/uh/like/so/but/or/because).
   - Emit `{"ev":"turn_end","speaker","text","ms":{...}}` with timings.
   - Pytest: feed a committed test WAV. Generate it with Kokoro in `worker/tests/data/`; do not commit owner audio. Assert one `turn_end` with the expected words, and no `turn_end` when the WAV is cut mid-sentence with a 1 s pause.
-- [ ] **3. Speech worker: speaking.**
+- [x] **3. Speech worker: speaking.**
   - Add `{"op":"say","id","text"}`: Kokoro GPU (`af_heart`, `$JESTER_MODELS_DIR/kokoro-v1.0.onnx`) streams sentence chunks as `{"ev":"audio_out","id","pcm":b64}`, 48 kHz **stereo** s16, ready for Discord. It ends with `{"ev":"say_done","id"}`.
   - Add `{"op":"cancel","id"}`: stop generating and drop queued chunks.
   - Pytest: first chunk in under 800 ms after warm-up, and cancel stops output within one chunk.
   - Cap Parakeet's ONNX arena with `gpu_mem_limit` so both fit in 8 GB, and log peak VRAM at startup.
-- [ ] **4. Brain client (Node).** `src/brain.mjs` wraps `codex app-server`, following `bench/bench_brain.py`, which is proven.
+- [x] **4. Brain client (Node).** `src/brain.mjs` wraps `codex app-server`, following `bench/bench_brain.py`, which is proven.
   - Use the lean flags, `thread/start` with a Jester `baseInstructions` persona (spoken, 1–2 sentences, never fake EBI facts), `ephemeral:true`, read-only sandbox and approval `never`.
   - API: `prewarm()`, `ask(text, {speaker}) → async iterator of sentence strings` (split streamed deltas at sentence ends), `interrupt()`, `injectContext(text)`.
   - Stall cue: emits `thinking` if no word has arrived after 2.5 s.
   - `node --test` uses a **fake app-server script** (a tiny Node process speaking the same JSON-RPC) and never the real model.
   - Add `scripts/smoke-brain.sh` for one live call, run by hand only.
-- [ ] **5. Discord voice I/O (Node).** `src/voice.mjs`:
+- [x] **5. Discord voice I/O (Node).** `src/voice.mjs`:
   - Log in with discord.js (intents: Guilds, GuildVoiceStates) and `joinVoiceChannel` with `selfDeaf:false, selfMute:false`, plus DAVE debug logging (copy the pattern from `drew-ai-voice-runtime/extensions/voice_transcripts/src/transport.mjs`).
   - Receive: subscribe per user, decode Opus → 48 k stereo → **16 k mono** frames → worker. Skip bots and Jester itself.
   - Playback: `AudioPlayer` fed from a PCM stream per reply. `stopNow()` stops playback immediately, and it tracks how many ms of each reply actually played.
   - Unit-test the resample/downmix and the "played ms" math.
   - Add `scripts/smoke-voice.sh`: joins, plays a 1 s tone, leaves. Run by hand only.
-- [ ] **6. Conversation loop.** `src/conversation.mjs` wires worker ↔ brain ↔ voice, **owner-only for now** (guests are ignored this phase).
+- [x] **6. Conversation loop.** `src/conversation.mjs` wires worker ↔ brain ↔ voice, **owner-only for now** (guests are ignored this phase).
   - **Speculative start:** on the owner's `pause` with prob > 0.3, start `brain.ask`, but hold the audio until `turn_end`. If speech resumes, discard the draft (`interrupt`) and merge the text into the next ask.
   - **Barge-in:** a `speech_start` from the owner while Jester is speaking triggers `voice.stopNow()` + worker `cancel` + `brain.interrupt()`. Record only the words actually heard, estimated from played ms, as Jester's turn in context via `injectContext`.
   - **Stall:** on `thinking`, play a short "mm, one sec" from a cached clip.
   - Log each turn to `logs/turns.jsonl`: end-of-speech→first-audio ms, STT ms, brain first-word ms, TTS first-chunk ms, and barge-in stop ms.
   - Tests use fakes for all three parts, covering the speculative-discard, barge-in and stall paths.
-- [ ] **7. Presence.**
+- [x] **7. Presence.**
   - Auto-join when the owner joins `DISCORD_VOICE_CHANNEL_ID`, and leave when the owner leaves.
   - "Jester, leave" / "Jester, disconnect" (owner, clearly addressed; bare "leave"/"stop" must **not** trigger it) makes Jester leave and not auto-rejoin during this owner presence.
   - Text escape hatch: owner types `!jester leave` / `!jester join` in the transcript channel. Needs the `GuildMessages` + `MessageContent` intents; check that the bot already has them.
   - Prewarm the brain thread on join. Test the state machine with fakes.
-- [ ] **8. Room transcripts (replaces the old bot's).**
+- [x] **8. Room transcripts (replaces the old bot's).**
   - Write every speaker's `turn_end` text, plus Jester's *heard* replies, to `~/.local/share/drew-ai-voice-transcripts/runtime/transcripts/<session-id>.md`. Use the **exact** old format: header lines `- Session:`, `- Channel:`, `- Started:`, `- Ended:`, and lines `**HH:MM:SS — Name:** text` in UTC.
   - Use a new session id per voice presence.
   - Test: parse the output with `allwork`'s own regexes (`LINE_RE`, `STARTED_RE` from `~/main-projects/automate 247/allwork/transcript.py`). Guests are transcribed too, but not answered this phase.
-- [ ] **9. Recover from failures during a long voice session.**
+- [x] **9. Recover from failures during a long voice session.**
   - If the Python worker or Codex app-server exits or stops responding, terminate the stale process, restart with a short bounded backoff, and let the next owner turn work. Do not replay an interrupted reply or send duplicate speech.
   - If Discord voice disconnects, reconnect and rejoin only when the owner is still in the configured room and has not said "Jester, leave". Clean up subscriptions and audio streams after each disconnect.
   - Bound queued input audio, pending TTS chunks, and log growth so a long session cannot consume memory or disk without limit. Drop stale audio after a disconnect or barge-in.
   - Add fake-process and fake-voice tests for a worker crash, a hung brain, a voice disconnect, and stale queued audio. `bash scripts/check.sh` must remain offline and finish in about 2 minutes.
-- [ ] **10. Package the local owner trial.**
+- [x] **10. Package the local owner trial.**
   - `npm start` runs Node, spawns the worker, and shuts down cleanly on SIGINT. Load the existing `VOICE_GUILD_ID`, `VOICE_CHANNEL_ID`, and `VOICE_TRANSCRIPT_CHANNEL_ID` from the old voice env file when Jester's own `DISCORD_*` IDs are absent; continue loading the EBI token and owner ID. Test config with fake values, never print credentials.
   - Add `deploy/jester-voice.service` with an absolute project path, `Restart=always`, and a short restart delay, but do not enable it yet. Add short README instructions for starting and stopping a local trial.
   - Verify startup and recovery with offline fakes. Check the live smoke scripts for syntax only; do not log into Discord, run live smoke tests, enable the service, or stop `drew-ai-voice-transcripts.service` before the owner chooses whether Jester uses the existing EBI bot account or a separate bot and tries the voice room.
