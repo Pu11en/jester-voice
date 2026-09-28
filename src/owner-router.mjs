@@ -111,6 +111,7 @@ export class OwnerRouter {
         }
       }
       if (!sources.length) return "No sessions are working on a turn right now.";
+      if (sources.length > 100) return "I can watch up to 100 sessions at once. Please name a smaller group.";
       const current = (await this.client.snapshot()).filter(s => !s.closed &&
         ["running", "queued"].includes(s.state));
       const currentIds = new Set(current.map(s => s.threadId));
