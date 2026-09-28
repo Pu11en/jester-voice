@@ -133,3 +133,11 @@ test("a just-listen or correction arriving during resolution cancels the pending
   }), null);
   assert.equal(calls.length, 0);
 });
+
+test("a tag reassigned during lookup cannot send to its old destination", async () => {
+  const { router, client, calls } = setup();
+  let lookups = 0;
+  client.resolveTag = async () => ({ kind: "found", session: ++lookups === 1 ? franky : zoro });
+  assert.match(await router.handle("Tell Frankie to check login", { speakerId: ownerId }), /tag changed/);
+  assert.equal(calls.length, 0);
+});

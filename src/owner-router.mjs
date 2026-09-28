@@ -48,6 +48,11 @@ export class OwnerRouter {
     return this.client.resolveTag(name);
   }
 
+  async #stillTarget(name, session, allowReference) {
+    const current = await this.#target(name, allowReference);
+    return current.kind === "found" && current.session.threadId === session.threadId;
+  }
+
   async handle(text, { speakerId, allowReference = false, shouldAct = () => true } = {}) {
     if (String(speakerId) !== this.ownerId) return null;
     const intent = parseOwnerIntent(text);
@@ -91,6 +96,10 @@ export class OwnerRouter {
       if (source.session.threadId === destination.session.threadId) {
         return "Those names point to the same session. Please name two different sessions.";
       }
+      if (!(await this.#stillTarget(intent.source, source.session, false)) ||
+          !(await this.#stillTarget(intent.target, destination.session, false))) {
+        return "One of those tags changed while I was checking. Please say the task again.";
+      }
       if (!shouldAct()) return null;
       await this.dependencies.add({ sourceId: source.session.threadId,
         destinationId: destination.session.threadId, task: intent.instruction });
@@ -127,12 +136,18 @@ export class OwnerRouter {
       return `${name} is ${session.state}.${task}`;
     }
     if (intent.kind === "stop") {
+      if (!(await this.#stillTarget(intent.target, session, allowReference))) {
+        return "That tag changed while I was checking. Please say it again.";
+      }
       if (!shouldAct()) return null;
       const result = await this.client.stopTurn(session.threadId, this.ownerId);
       this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
       return result.status === "stopped" ? `I stopped ${name}'s current turn.` : `${name} is already idle.`;
     }
     if (intent.kind === "close") {
+      if (!(await this.#stillTarget(intent.target, session, allowReference))) {
+        return "That tag changed while I was checking. Please say it again.";
+      }
       if (!shouldAct()) return null;
       const result = await this.client.closeSession(session.threadId, this.ownerId);
       this.bound = null;
@@ -141,6 +156,9 @@ export class OwnerRouter {
     if (intent.kind === "runtime") {
       const choice = runtimeChoice(intent);
       if (!choice) return "I couldn't match that model and agent combination. Please name one supported choice.";
+      if (!(await this.#stillTarget(intent.target, session, allowReference))) {
+        return "That tag changed while I was checking. Please say it again.";
+      }
       if (!shouldAct()) return null;
       await this.client.setRuntime(session.threadId, choice);
       this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
@@ -148,6 +166,9 @@ export class OwnerRouter {
         `${name} will use Codex on its next turn.`;
     }
     if (intent.kind !== "message") return null;
+    if (!(await this.#stillTarget(intent.target, session, allowReference))) {
+      return "That tag changed while I was checking. Please say the task again.";
+    }
     if (!shouldAct()) return null;
     this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
     let receipt;
