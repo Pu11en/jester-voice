@@ -78,3 +78,40 @@ test("a replacement turn suppresses a parked failure during the grace period", a
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("an expired turn reports a possible failure and blocks follow-on work", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-events-"));
+  let now = 0;
+  const responses = [empty()];
+  const spoken = [];
+  const failed = [];
+  const watcher = new EventWatcher({
+    client: { turnUpdates: async () => responses.shift() || empty(),
+      snapshot: async () => [{ threadId, tag: "franky" }] },
+    conversation: { mode: "conversation", turn: null, reply: null,
+      announce: text => { spoken.push(text); return true; } },
+    presence: { inPresence: true, joined: true, paused: false },
+    dependencies: { async failed(id) { failed.push(id); }, async reconcile() {} },
+    file: join(dir, "events.json"), now: () => now, intervalMs: 60_000,
+  });
+  try {
+    await watcher.start();
+    await tickWait();
+    responses.push({ turns: [{ turn_key: "expired-1", thread_id: threadId,
+      state: "scheduled", parked: true, updated_at: "2026-09-28T12:00:01+00:00" }],
+    next: { since: "2026-09-28T12:00:01+00:00", after: "expired-1" }, has_more: false });
+    await watcher.tick();
+    assert.equal(spoken.length, 0);
+    responses.push({ turns: [{ turn_key: "expired-1", thread_id: threadId,
+      state: "expired", parked: false, updated_at: "2026-09-28T12:00:02+00:00" }],
+    next: { since: "2026-09-28T12:00:02+00:00", after: "expired-1" }, has_more: false });
+    await watcher.tick();
+    now = 6_000;
+    await watcher.tick();
+    assert.deepEqual(failed, [threadId]);
+    assert.deepEqual(spoken, ["franky stopped or may need attention."]);
+  } finally {
+    await watcher.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

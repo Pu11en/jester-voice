@@ -86,9 +86,10 @@ export class EventWatcher {
       this.#notice(`${turn.turn_key}:accepted`, turn.thread_id, "finished");
       await this.dependencies?.accepted(turn.thread_id);
     }
-    else if (turn.parked) {
-      const id = `${turn.turn_key}:parked`;
-      if (!this.state.pending.some(p => p.id === id)) {
+    else if (turn.parked || turn.state === "expired") {
+      // The same logical turn can move from parked to expired. Keep one notice.
+      const id = `${turn.turn_key}:failure`;
+      if (!this.state.seen.includes(id) && !this.state.pending.some(p => p.id === id)) {
         this.state.pending.push({ id, threadId: turn.thread_id, due: this.now() + 5_000 });
       }
     }
