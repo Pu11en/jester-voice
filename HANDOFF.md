@@ -24,6 +24,8 @@ The owner also wants an explicit **transcript-only mode**: `Jester, just listen`
 
 **Spoken task text (owner choice A, 2026-09-28):** when Drew finishes a task request, Jester sends one clean, faithful prompt to the chosen EBI session. It removes filler, repeated starts, and superseded corrections, but preserves concrete names, paths, constraints, and Drew's final intent. It adds no new goals or permissions. Send automatically when the destination and request are clear; do not require a readback or approval on every task. If the target or a consequential instruction is genuinely ambiguous, ask one short spoken clarification before sending. Keep the recognized speech in the room transcript and show the final task in the destination thread so Drew can see what was sent. A request to read back or revise the draft is honored when Drew asks for it.
 
+**Current build scope (owner update, 2026-09-28):** implement Drew's own conversation, transcript-only mode, room transcripts/privacy, and owner EBI session control first. Defer guest conversations, guest EBI control, and temporary permission grants to a later phase; do not ask Drew guest design questions during this build. Other people's speech may still be transcribed under the room-transcript policy, and the existing recording notice and anyone-can-Pause privacy control remain in scope. The earlier shared-room/guest sections below describe later capabilities, not current acceptance requirements. No timed overnight build is scheduled; work proceeds in small checked slices as soon as it is ready.
+
 ## Mission
 
 Build a separate Discord voice bot/service called Jester that lets the owner operate and navigate the existing EBI/ccdb agent environment almost entirely by natural spoken conversation.

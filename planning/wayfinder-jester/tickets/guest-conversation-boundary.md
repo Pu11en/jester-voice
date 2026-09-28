@@ -1,7 +1,7 @@
 # Ticket: When may other people in the voice room talk with Jester?
 
 - `wayfinder:grilling` (HITL)
-- Frontier: YES (2026-09-28)
+- Frontier: DEFERRED (owner request, 2026-09-28)
 
 ## Question
 
@@ -10,3 +10,7 @@
 ## Recommendation
 
 Keep the original shared-room rule: guests may say `Jester` to start an ordinary conversation, and can follow up while engaged. Jester never shares private session/project information or controls EBI for them without a scoped owner grant. Ambient guest speech is transcribed under the room policy but ignored as a request. Drew has priority if both speak.
+
+## Owner scope update
+
+Drew took guest conversation and guest EBI permissions off the current build. Do not ask guest design questions or implement guest replies/grants now. Keep room transcription and the existing recording notice/anyone-can-Pause privacy requirement because others may still be present. Revisit this ticket only when Drew asks for guest behavior later.

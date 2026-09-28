@@ -1,4 +1,6 @@
-# Jester overnight full implementation
+# Archived draft: Jester overnight full implementation
+
+**Do not dispatch this manifest.** Drew canceled the timed build and deferred guest conversation/control on 2026-09-28. This older draft still contains guest tasks and does not yet cover the newly found spoken-delivery/first-turn runtime gaps. Use the current Drew-only plans and build small checked slices instead.
 
 Check: bash scripts/check.sh
 Try: systemctl --user start jester-voice.service

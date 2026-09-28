@@ -10,7 +10,7 @@
 
 - **Source of truth:** `HANDOFF.md`, then `REPLACES_OLD_VOICE.md`. Measured facts: `MACHINE.md`, `EBI_INTERFACES.md`, `RESEARCH.md`, `bench/*_RESULTS.md`.
 - **Override (execution in the map):** this map carries execution. Build tickets point to a `PLAN-*.md` that runs unattended with `/gowork`. Decision tickets stay decisions.
-- **Order rule from HANDOFF:** originally, don't build EBI control until the Phase 1 loop passes the owner's feel test. Drew subsequently requested the complete build to run unattended overnight. The automated implementation may proceed, but the owner feel test remains required before claiming the experience is accepted.
+- **Order rule from HANDOFF:** originally, don't build EBI control until the Phase 1 loop passes the owner's feel test. Drew wants independent owner-only work to proceed now in checked slices; his live feel test remains required before claiming the experience is accepted.
 - **Owner preferences:** plain-language questions, one at a time. "Just pick one" means decide technical and taste choices by measurement. GitHub is always last.
 - **Machine limits:** RTX 4060 8 GB; WSL has 4 CPU threads; C: is nearly full, so reuse `bench/.venv` and never install another large toolchain. Docker Desktop 4.92 has a WSL integration bug, worked around with `DOCKER_HOST=tcp://localhost:2375`; Jester doesn't need Docker.
 - **Skills:** grilling + domain-modeling for HITL tickets, research for AFK research tickets.
@@ -31,18 +31,19 @@
 
 ## Current frontier
 
-- [Full remaining-work plan](../PLAN-jester-completion.md): 28 small outcomes across voice/parity, safe EBI control, events and long-run behavior. The overnight manifest below assigns its 27 automated outcomes to repository-specific work copies; Drew's feel test is the remaining human outcome.
-- [Overnight execution manifest](../PLAN-jester-overnight-manifest.md): 27 automated tasks across Jester, EBI and allwork in separate repository copies, with dependency checks and automatic local integration on success. It includes wake/re-arm acceptance, active-only direct tags, and transcript-only mode; its delivery and first-turn runtime tasks still need the newly found EBI API limits incorporated. One-shot scheduler task 31 is targeted for **2026-09-28 19:00 CDT**, and task 32 for **2026-09-29 07:30 CDT**; both remain **disabled while Drew continues planning**, verified through `/api/tasks` at 09:49 CDT. The build has not started yet.
+- [Full remaining-work plan](../PLAN-jester-completion.md): Drew-only voice/parity, safe EBI control, events and long-run behavior are active. Guest conversation and grants are parked for later. The plan still needs the delivery/receipt, long-prompt, and first-turn runtime gaps split into small repo-scoped outcomes.
+- [Immediate Drew-only voice slice](../PLAN-jester-drew-voice-slice.md): five checked, owner-only voice outcomes can run now in safe copies, independent of the later EBI handoff work.
+- [Old overnight manifest](../PLAN-jester-overnight-manifest.md): archived draft only; it contains guest work and must not be dispatched. Drew canceled the timed build. Scheduler tasks 31 and 32 were **deleted and absence verified through `/api/tasks`** on 2026-09-28.
 - [Voice behavior gap audit](wayfinder-jester/research/voice-behavior-gap-audit.md): checks original handoff against the Phase 1 code; dormant attention and transcript-only mode were missing, and new-session work must include actually dispatching the assignment.
 - [Owner feel test](wayfinder-jester/tickets/feel-test-phase1.md): open. Eight completed live turns measured about 2.8 s median to first audio, above the ~1.5 s handoff target; a 10–15 minute owner check is still required before claiming acceptance.
 - [Allwork trigger decision](wayfinder-jester/tickets/allwork-trigger-at-cutover.md): resolved to Goku for the existing trigger; the new idea-saving feature remains canceled. The installed trigger still matches “Jester” until the build task runs.
-- [EBI interface decision](wayfinder-jester/tickets/may-jester-change-ebi.md): resolved to narrow local, tested EBI changes for status, pure stop and guest grants, with live activation separated from the unattended build.
+- [EBI interface decision](wayfinder-jester/tickets/may-jester-change-ebi.md): resolved to narrow local, tested EBI changes for status and pure stop. Guest grants are deferred. Live activation remains separate from safe-copy build checks.
 - **Direct-tag decision:** Drew chose tag instructions only while Jester is already engaged. Dormant tag speech remains transcript only.
 - [Computer-work boundary](wayfinder-jester/tickets/computer-work-boundary.md): resolved to A. EBI sessions perform project/computer work; Jester handles voice, identity, exact routing and narrow read-only EBI status/history checks.
 - [Voice-to-EBI handoff audit](wayfinder-jester/research/voice-to-ebi-handoff.md): records the typed-equivalent flow and concrete API limits: `/spoken` accepts only 4,000 characters, returns acceptance before asynchronous delivery, and lacks an idempotent request ID; `/spawn` cannot choose the first-turn backend/model in one call.
 - [Spoken prompt shape](wayfinder-jester/tickets/spoken-prompt-shape.md): resolved to one clean, faithful prompt, automatically sent when clear, with no routine readback.
-- [Guest conversation boundary](wayfinder-jester/tickets/guest-conversation-boundary.md): open. The original handoff allows guest chat, but Drew's newer owner-focused wake wording could imply a narrower rule.
-- **Next frontier:** settle guest conversation, then the remaining morning rollout and human feel-test boundaries; revise delivery/receipt, long-prompt and initial-runtime tasks before resuming the schedule. The owner feel test remains the final experience gate.
+- [Guest conversation boundary](wayfinder-jester/tickets/guest-conversation-boundary.md): deferred at Drew's request. Guests remain transcribed and may pause recording, but Jester does not answer or grant session access to them in the active build.
+- **Next frontier:** start the independent Drew-only voice slice now; while it runs, close the owner-only spoken-delivery/receipt, long-prompt and first-turn runtime plan gaps. The owner feel test remains the final experience gate. No timed build is pending.
 - **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
 
 ## Already implemented infrastructure

@@ -4,7 +4,7 @@ Check: bash scripts/check.sh
 Try: systemctl --user start jester-voice.service
 Open: Drew's configured Discord voice room; Jester joins when Drew does.
 
-Goal: Jester replaces the old voice service without losing its useful transcript features, lets Drew and permitted guests converse naturally, controls the right EBI sessions safely, reports meaningful agent events, and survives long sessions and restarts. This is the **master plan**. The overnight manifest splits automated work into repository-scoped runs for Jester, EBI, and allwork, each with its own safe copy and check.
+Goal: Jester replaces the old voice service without losing its useful transcript features, lets Drew converse naturally and control the right EBI sessions safely, reports meaningful agent events, and survives long sessions and restarts. This is the **master plan**. Work now proceeds in small checked slices; guest conversation and guest control are parked for later.
 
 ## What the review found
 
@@ -13,8 +13,8 @@ Goal: Jester replaces the old voice service without losing its useful transcript
 - ⚠️ **Streaming is narrower than promised:** the brain yields sentences, but the conversation layer waits for the whole brain answer before sending any to Kokoro. The cached “mm, one sec” clip can also play while Drew is only pausing mid-thought. Both need correction before judging speed and turn-taking.
 - ⚠️ **Attention and modes are missing:** every completed owner utterance currently reaches Luna, even when Drew did not address Jester. There is no explicit `Jester, just listen` transcript-only mode. Room transcription and conversational attention must be separate.
 - ⚠️ **The old replacement is incomplete:** transcript files work, but Jester does not update the Discord Auto Transcripts message, show a recording notice or Pause control, prune files after 30 days, or resolve allwork's still-live “Jester” idea trigger. The old voice service supplied those features before it was archived.
-- ⬜ **The larger Jester mission is still unbuilt:** guests cannot converse with Jester yet; there is no deterministic permission/grant layer, Zoro/Nami status or control, new-session creation, history lookup, proactive event delivery, or simple “when this finishes” dependencies.
-- ⚠️ **EBI has real interface limits:** its `/spoken` endpoint only accepts Drew, `/api/sessions` can reassign tags while being read, and it has no push event feed or pure stop-turn endpoint. A safe full guest-control experience needs small, tested EBI changes; Jester must never impersonate Drew for a guest.
+- ⬜ **The larger Drew-only mission is still unbuilt:** there is no Zoro/Nami status or control, new-session creation, history lookup, proactive event delivery, or simple “when this finishes” dependencies. Guest conversation and grants are deferred.
+- ⚠️ **EBI has real interface limits:** its `/spoken` endpoint accepts Drew but gives only early asynchronous acceptance, `/api/sessions` can reassign tags while being read, and it has no push event feed or pure stop-turn endpoint. Delivery receipts, long prompts, and first-turn model choice need explicit treatment; guest authorization is deferred.
 
 The Phase 1 plan deliberately stopped at talking in Discord because `HANDOFF.md` requires a feel test before EBI control. Calling that partial build “Jester done” and retiring the old feature before restoring its privacy/channel behavior was my mistake. This plan closes that gap.
 
@@ -25,9 +25,8 @@ Each checkbox is one small outcome, intended for one fresh build session of abou
 - [ ] **1. Stream speech after Drew finishes a turn.** Keep speculative output silent until turn end, then send each completed Luna sentence to Kokoro as it arrives; cancel a stale sentence on correction or interruption. A fake slow brain must prove the first sentence plays before the final sentence exists. Repo: Jester.
 - [ ] **2. Keep the stall cue out of Drew's pauses.** Play the cached cue only after an accepted turn has waited 2.5 seconds for a word; never play it during a tentative pause, after barge-in, or twice for one turn. Repo: Jester.
 - [ ] **3. Handle an unavailable brain aloud.** If Codex login, quota, or app-server fails, tell Drew briefly with a local cached voice clip and keep deterministic leave/privacy controls available; do not silently switch to a paid API or another model. Repo: Jester.
-- [ ] **4. Add conversational attention.** On join and after an exchange ends, require an addressed `Jester` before calling Luna or speaking; a session tag alone does not wake Jester. During an active exchange, follow up naturally without repeating the name; do not let ambient room talk keep it active. Return to dormant after a lull or clear conversational ending, with timing tuned in Drew's feel test. Prefer Drew when voices overlap. Keep all-speaker room transcription independent of this gate. Check waking, follow-up, pause, re-arming, ambient tag speech, side conversation, and mixed owner/guest events with a fake brain. Repo: Jester.
+- [ ] **4. Add conversational attention.** On join and after an exchange ends, require an addressed `Jester` before calling Luna or speaking; a session tag alone does not wake Jester. During an active exchange, Drew follows up naturally without repeating the name; ambient room talk does not keep it active. Return to dormant after a lull or clear conversational ending, with timing tuned in Drew's feel test. Keep all-speaker room transcription independent of this gate, but ignore non-owner speech as a request. Check waking, follow-up, pause, re-arming, ambient tag speech and mixed-speaker events with a fake brain. Repo: Jester.
 - [ ] **4a. Add transcript-only voice mode.** `Jester, just listen` immediately stops speech and pending actions, then records everyone without Luna replies, spoken acknowledgements, or EBI/tag actions. Only Drew can switch modes; `Jester, talk again` restores normal dormant conversation. Recognize both phrases deterministically even while silent; preserve privacy Pause and owner leave/typed escape controls. Show the mode in the transcript channel, keep it through a transient reconnect during the same owner presence, and reset it for a new presence. Check every speaker still reaches the transcript and no ordinary or tag-addressed speech reaches the brain or actions. Repo: Jester.
-- [ ] **5. Let guests have ordinary conversations.** A guest who addresses Jester can talk and interrupt its reply, while private EBI facts and all control actions remain blocked in code; no model text can grant itself permission. Repo: Jester.
 - [ ] **6. Restore the transcript-channel post.** Create one attached Markdown transcript message per room session in Auto Transcripts and update that same message as turns arrive, with bounded update frequency and retry after a transient Discord failure. Keep the current allwork-compatible file. Repo: Jester.
 - [ ] **7. Restore recording privacy controls.** Show a clear room notice with Pause; anyone in the room can pause audio capture/transcription, only Drew can resume, and paused audio is never sent to STT or Luna or saved. Test both Discord identity and restart behavior. Repo: Jester.
 - [ ] **8. Restore the 30-day transcript cleanup.** Prune only aged transcript files after checking the path and leave current sessions untouched; test with dated fixtures. Repo: Jester.
@@ -47,8 +46,6 @@ For the requested unattended build, implement this section after the automated v
 - [ ] **17. Add a pure stop-turn endpoint.** Add a narrowly scoped EBI endpoint that stops one exact active turn without sending a new prompt; verify it cannot stop another session or all sessions by accident. Repo: EBI.
 - [ ] **18. Wire spoken stop to the exact turn.** Resolve the target ID and call the checked stop endpoint; acknowledge when the target is already idle. Repo: Jester.
 - [ ] **19. Add a read-only tag/status endpoint to EBI.** Remove Jester's need to trigger tag reassignment or Discord renames just to answer a status question; keep the old API behavior for existing callers. Repo: EBI.
-- [ ] **20. Add guest authorization at EBI's boundary.** Accept the real guest identity and a narrowly scoped Jester grant, and reject a guest without that grant instead of treating them as Drew. Test forged identities, expired grants and wrong-session actions. Repo: EBI.
-- [ ] **21. Add temporary grants in Jester.** Only Drew can grant, revoke or make access permanent; default grants expire with the voice session and cover the named person, capability and session. Guests cannot re-delegate. Repo: Jester.
 
 ## Finally: memory, events and long-run behavior
 
@@ -57,15 +54,21 @@ For the requested unattended build, implement this section after the automated v
 - [ ] **24. Deliver events at the right moment.** Hold normal completions for a conversational gap, speak blockers/failures promptly, bundle routine updates, and persist meaningful missed events for one catch-up when Drew returns. Repo: Jester.
 - [ ] **25. Support simple requested dependencies.** “When Zoro finishes, tell Sanji to start” and “when both finish, tell me what I can test” store exact IDs and one-time actions, survive a restart, and do not launch twice or act on failed/ambiguous results. Repo: Jester.
 - [ ] **26. Shed idle load and report degradation.** When the room is empty, stop needless STT/TTS compute and release model resources where safe; wake without making Drew wait unreasonably. Report Codex capacity or local overload plainly without silently throttling EBI workers. Repo: Jester.
-- [ ] **27. Finish the replacement check.** Verify wake/re-arm, transcript-only mode, owner/guest permissions, privacy Pause, edited transcript post, allwork parse, transcript retention, EBI actions, event recovery, 10–15 minutes of natural voice and restart behavior. Keep the old archive and rollback steps. No GitHub push until Drew has used it and says it is good.
+- [ ] **27. Finish the replacement check.** Verify wake/re-arm, transcript-only mode, owner permissions, privacy Pause, edited transcript post, allwork parse, transcript retention, EBI actions, event recovery, 10–15 minutes of natural voice and restart behavior. Keep the old archive and rollback steps. No GitHub push until Drew has used it and says it is good.
 
 ## Decisions, timing and how to try it
 
-- **EBI changes and allwork trigger:** the overnight manifest records the agreed local EBI API work and Drew's Goku choice for the existing allwork trigger. The main EBI bot is restarted only after local integration and active-session checks; canceled new idea saving stays shelved.
+- **EBI changes and allwork trigger:** local EBI API work and Drew's Goku choice for the existing allwork trigger remain in scope. The main EBI bot is restarted only after local integration and active-session checks; canceled new idea saving stays shelved.
 - **Quality gate:** Drew requested an unattended implementation across the repositories, so automated tasks can proceed before his 10–15 minute feel test. That test is still required before claiming the experience is accepted. The 2.8-second measured median means tuning may be needed before the gate passes.
 - **Direct tag decision:** Drew chose direct tag instructions only during an active Jester conversation. In dormancy, only `Jester` wakes it; no ambient tag speech dispatches EBI actions.
-- **Time:** 28 small outcomes imply roughly **12–21 hours of build and checking**, possibly split over more than one overnight run, plus Drew's remaining product decisions and the feel check. This is an estimate from task count and current code, not a promise that all 28 can finish in one night.
-- **Automation:** the overnight manifest has repo-scoped checks and dependency order. Its scheduled start and morning check are paused while Drew continues the experience review. Do not let a Jester safe copy directly edit the live EBI or allwork checkout.
+- **Time:** re-estimate after the owner-only delivery/receipt, long-prompt and first-turn runtime work is split into small tasks. No overnight completion promise is attached to the old draft estimate; start independent work now and report actual progress.
+- **Automation:** the previous timed build and morning check were deleted at Drew's request. Use small immediate checked slices in safe copies, and do not let a Jester safe copy directly edit the live EBI or allwork checkout.
+
+## Later: guest conversation and delegation
+
+- Guest-addressed ordinary conversation, guest interruption, and owner priority over overlapping speakers.
+- Scoped, temporary guest grants checked at the EBI action boundary, with owner-only grant/revoke control.
+- Guest privacy and identity checks for those later capabilities. Room transcription, recording notice, and anyone-can-Pause remain in the current scope because the room already includes other people.
 
 ## How to try it
 
