@@ -1,5 +1,7 @@
 # Finish Jester Voice — full review and build plan
 
+Current trial findings and the next checked fixes: [Jester voice trial review](REVIEW-jester-trial-2026-09-28.md).
+
 Check: bash scripts/check.sh
 Try: systemctl --user start jester-voice.service
 Open: Drew's configured Discord voice room; Jester joins when Drew does.
