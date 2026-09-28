@@ -21,6 +21,14 @@ function setup() {
     sendSpoken: async payload => { calls.push(payload); return { request_id: "jester-test", status: "posted" }; },
     spokenReceipt: async () => ({ request_id: "jester-test", status: "posted" }),
     stopTurn: async (...args) => { calls.push(["stop", ...args]); return { status: "stopped" }; },
+    resolveProject: async name => name === "jester-voice" ?
+      { kind: "local_available", locally_verified: true, path: "/projects/jester-voice", name } :
+      { kind: "no_match" },
+    spawnSession: async payload => { calls.push(["spawn", payload]); return {
+      thread_id: "1554146845415055445", voice_label: "jinbe", status: "spawned",
+    }; },
+    setRuntime: async (...args) => { calls.push(["runtime", ...args]); return { status: "set" }; },
+    closeSession: async (...args) => { calls.push(["close", ...args]); return { state: "pending" }; },
   };
   const router = new OwnerRouter({ client, ownerId, now: () => now });
   return { router, calls, setRows: next => { rows = next; }, setNow: next => { now = next; } };
@@ -65,4 +73,27 @@ test("stop sends no prompt and targets only the resolved active turn", async () 
   assert.equal(await router.handle("Jester, stop Zoro", { speakerId: ownerId }),
     "I stopped zoro's current turn.");
   assert.deepEqual(calls, [["stop", zoro.threadId, ownerId]]);
+});
+
+test("creates a Codex session only in a verified project with its first task", async () => {
+  const { router, calls } = setup();
+  assert.match(await router.handle("Jester, start a new session in jester-voice to check the tests",
+    { speakerId: ownerId }), /jinbe/);
+  assert.deepEqual(calls[0], ["spawn", { projectPath: "/projects/jester-voice",
+    instruction: "check the tests", ownerId, backend: "codex", model: null }]);
+  assert.match(await router.handle("Create a session in mystery to check tests",
+    { speakerId: ownerId }), /couldn't find/);
+  assert.equal(calls.length, 1);
+  await router.handle("Start a session in jester-voice with Claude Sonnet to check tests",
+    { speakerId: ownerId });
+  assert.deepEqual(calls[1][1], { projectPath: "/projects/jester-voice",
+    instruction: "check tests", ownerId, backend: "claude", model: "sonnet" });
+});
+
+test("runtime change and close apply only to the named session", async () => {
+  const { router, calls } = setup();
+  assert.match(await router.handle("Switch Zoro to Claude Sonnet", { speakerId: ownerId }), /sonnet/);
+  assert.deepEqual(calls[0], ["runtime", zoro.threadId, { backend: "claude", model: "sonnet" }]);
+  assert.match(await router.handle("Close Zoro", { speakerId: ownerId }), /close after/);
+  assert.deepEqual(calls[1], ["close", zoro.threadId, ownerId]);
 });

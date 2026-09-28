@@ -69,3 +69,18 @@ test("unknown delivery never retries a spoken POST", async () => {
   /Delivery uncertain/);
   assert.equal(posts, 1);
 });
+
+test("a lost spawn response resolves its correlation without creating another thread", async () => {
+  const calls = [];
+  const client = new EbiClient({ fetchImpl: async (url, options) => {
+    calls.push({ url, method: options.method || "GET", body: options.body });
+    if (options.method === "POST") throw new Error("response lost");
+    return { ok: true, json: async () => ({ thread_id: "1554146845415055445" }) };
+  } });
+  const result = await client.spawnSession({ projectPath: "/projects/jester-voice",
+    instruction: "check the tests", ownerId: "488763953397235712", correlationId: "jester-spawn-1" });
+  assert.equal(result.thread_id, "1554146845415055445");
+  assert.deepEqual(calls.map(c => c.method), ["POST", "GET"]);
+  assert.match(calls[1].url, /jester-spawn-1$/);
+  assert.equal(JSON.parse(calls[0].body).model, undefined);
+});

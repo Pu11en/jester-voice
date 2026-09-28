@@ -7,6 +7,15 @@ test("finds read-only status requests without treating a passing name as an acti
   assert.deepEqual(parseOwnerIntent("Who's running?"), { kind: "status-all" });
   assert.equal(parseOwnerIntent("We talked about Frankie yesterday"), null);
   assert.deepEqual(parseOwnerIntent("Jester, stop Zoro"), { kind: "stop", target: "Zoro" });
+  assert.deepEqual(parseOwnerIntent("Jester, close Zoro"), { kind: "close", target: "Zoro" });
+  assert.deepEqual(parseOwnerIntent("Switch Zoro to Claude Sonnet"),
+    { kind: "runtime", target: "Zoro", runtime: "Claude", model: "Sonnet" });
+  assert.deepEqual(parseOwnerIntent("Jester, start a new session in jester-voice to check the tests"),
+    { kind: "create", project: "jester-voice", runtime: null, model: null,
+      instruction: "check the tests" });
+  assert.deepEqual(parseOwnerIntent("Start a session in jester-voice with Claude Sonnet to check tests"),
+    { kind: "create", project: "jester-voice", runtime: "Claude", model: "Sonnet",
+      instruction: "check tests" });
 });
 
 test("final direct address and corrected destination yield one task draft", () => {

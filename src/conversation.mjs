@@ -238,10 +238,10 @@ export class Conversation {
     const text = this.turn?.resumed
       ? mergeText(this.turn.carriedText || this.turn.pauseText, event.text)
       : event.text.trim();
-    if (this.ownerRouter && parseOwnerIntent(text)) {
+    const intent = this.ownerRouter ? parseOwnerIntent(text) : null;
+    if (intent) {
       await this.#abortDraft();
-      const intent = parseOwnerIntent(text);
-      if (intent?.kind === "message" || intent?.kind === "stop") {
+      if (["message", "stop", "close", "runtime", "create"].includes(intent.kind)) {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;

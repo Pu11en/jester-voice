@@ -4,6 +4,22 @@ const PRONOUNS = new Set(["him", "her", "them", "that one", "that session"]);
 const BIND_MS = 60_000;
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+function runtimeChoice(intent) {
+  const choice = intent.runtime.toLowerCase();
+  const requestedModel = intent.model?.toLowerCase() || null;
+  if (choice === "codex" && (!requestedModel || requestedModel === "auto")) {
+    return { backend: "codex", model: null };
+  }
+  if (["claude", "sonnet"].includes(choice) &&
+    (!requestedModel || ["sonnet", "opus", "haiku"].includes(requestedModel))) {
+    return { backend: "claude", model: requestedModel || "sonnet" };
+  }
+  if (["deepseek", "dsh"].includes(choice) && !requestedModel) {
+    return { backend: "dsh", model: "deepseek-v4-pro" };
+  }
+  return null;
+}
+
 /** Deterministic owner actions; model output never enters this action path. */
 export class OwnerRouter {
   constructor({ client, ownerId, now = () => Date.now() }) {
@@ -39,6 +55,26 @@ export class OwnerRouter {
       if (!sessions.length) return "No EBI sessions are running right now.";
       return `Running: ${sessions.map(s => s.tag || s.name || "unnamed session").join(", ")}.`;
     }
+    if (intent.kind === "create") {
+      if (/\b(?:actually|wait|rather|instead)\b/i.test(intent.instruction)) {
+        return "Please say the final first task once more before I create the session.";
+      }
+      const project = await this.client.resolveProject(intent.project);
+      if (project.kind !== "local_available" || project.locally_verified !== true || !project.path) {
+        return `I couldn't find one available local project named ${intent.project}. Please use its project name.`;
+      }
+      const choice = intent.runtime ? runtimeChoice(intent) : { backend: "codex", model: null };
+      if (!choice) return "I couldn't match that model and agent combination. Please name one supported choice.";
+      let created;
+      try {
+        created = await this.client.spawnSession({ projectPath: project.path,
+          instruction: intent.instruction, ownerId: this.ownerId, ...choice });
+      } catch {
+        return "I couldn't verify whether the session was created. I won't create it twice.";
+      }
+      this.bound = { threadId: created.thread_id, until: this.now() + BIND_MS };
+      return `I started a ${choice.backend} session for ${project.name}. Its tag is ${created.voice_label || "still being assigned"}.`;
+    }
     const resolved = await this.#target(intent.target, allowReference);
     if (resolved.kind === "ambiguous") return `More than one session matches ${intent.target}. Please name the exact one.`;
     if (resolved.kind !== "found") return `I can't find an open session named ${intent.target}.`;
@@ -52,6 +88,19 @@ export class OwnerRouter {
       const result = await this.client.stopTurn(session.threadId, this.ownerId);
       this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
       return result.status === "stopped" ? `I stopped ${name}'s current turn.` : `${name} is already idle.`;
+    }
+    if (intent.kind === "close") {
+      const result = await this.client.closeSession(session.threadId, this.ownerId);
+      this.bound = null;
+      return result.state === "pending" ? `${name} will close after its current turn.` : `I closed ${name}.`;
+    }
+    if (intent.kind === "runtime") {
+      const choice = runtimeChoice(intent);
+      if (!choice) return "I couldn't match that model and agent combination. Please name one supported choice.";
+      await this.client.setRuntime(session.threadId, choice);
+      this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
+      return choice.model ? `${name} will use ${choice.model} on its next turn.` :
+        `${name} will use Codex on its next turn.`;
     }
     if (intent.kind !== "message") return null;
     this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };

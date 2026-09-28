@@ -5,6 +5,9 @@ const CORRECTION = new RegExp(`^(?:actually|no|wait|rather)\\s+${NAME}\\s*[,;:�
 const TELL = new RegExp(`^(?:and\\s+)?(?:tell|ask|message)\\s+${NAME}(?:\\s+to\\s+|\\s+that\\s+|[,;:—–-]\\s*|\\s+|$)`, "iu");
 const DIRECT = new RegExp(`^(?:and\\s+)?${NAME}\\s*[,;:—–-]\\s*`, "iu");
 const STOP = new RegExp(`^(?:stop|interrupt)(?:\\s+the)?(?:\\s+current)?(?:\\s+turn\\s+(?:in|for))?\\s+${NAME}[?.!]*$`, "iu");
+const CLOSE = new RegExp(`^(?:close|archive|end)(?:\\s+the)?(?:\\s+session)?\\s+${NAME}[?.!]*$`, "iu");
+const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(codex|claude|sonnet|deepseek|dsh)(?:\\s+(sonnet|opus|haiku|auto))?[?.!]*$`, "iu");
+const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
 
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw) {
@@ -14,6 +17,13 @@ export function parseOwnerIntent(raw) {
   if (status) return { kind: "status-one", target: status[1] };
   const stop = STOP.exec(text);
   if (stop) return { kind: "stop", target: stop[1] };
+  const close = CLOSE.exec(text);
+  if (close) return { kind: "close", target: close[1] };
+  const runtime = RUNTIME.exec(text);
+  if (runtime) return { kind: "runtime", target: runtime[1], runtime: runtime[2], model: runtime[3] || null };
+  const create = CREATE.exec(text);
+  if (create) return { kind: "create", project: create[1].trim(), runtime: create[2] || null,
+    model: create[3] || null, instruction: create[4].trim() };
 
   const first = TELL.exec(text) || DIRECT.exec(text);
   if (!first) return null;

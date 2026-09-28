@@ -104,4 +104,53 @@ export class EbiClient {
       body: JSON.stringify({ speaker_id: String(speakerId) }),
     });
   }
+
+  async resolveProject(name) {
+    if (!name?.trim() || name.length > 200) throw new Error("Invalid project name");
+    return this.#request("/api/projects/resolve", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: name.trim() }),
+    });
+  }
+
+  async spawnSession({ projectPath, instruction, ownerId, backend = "codex", model = null,
+    correlationId = randomUUID() }) {
+    if (!projectPath?.startsWith("/") || !instruction?.trim() || !THREAD_ID.test(String(ownerId))) {
+      throw new Error("Invalid session request");
+    }
+    const payload = { prompt: instruction.trim(), working_dir: projectPath, user_id: String(ownerId),
+      backend, auto_start: true, correlation_id: correlationId };
+    if (model) payload.model = model;
+    try {
+      const result = await this.#request("/api/spawn", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      if (!THREAD_ID.test(result.thread_id)) throw new Error("Spawn returned an invalid thread ID");
+      return result;
+    } catch (error) {
+      // The thread may exist even when the answer was lost. Query its durable
+      // correlation, never repeat the spawn request with a new identity.
+      try {
+        const result = await this.#request(`/api/correlations/${encodeURIComponent(correlationId)}`);
+        if (!THREAD_ID.test(result.thread_id)) throw new Error("Invalid correlated thread ID");
+        return { status: "existing", ...result };
+      } catch { throw new Error(`Session creation uncertain for ${correlationId}`, { cause: error }); }
+    }
+  }
+
+  async setRuntime(threadId, { backend, model }) {
+    if (!THREAD_ID.test(threadId) || !backend) throw new Error("Invalid runtime target");
+    return this.#request(`/api/threads/${threadId}/runtime`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backend, model }),
+    });
+  }
+
+  async closeSession(threadId, ownerId) {
+    if (!THREAD_ID.test(threadId) || !THREAD_ID.test(String(ownerId))) throw new Error("Invalid close target");
+    return this.#request(`/api/threads/${threadId}/close`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actor: String(ownerId) }),
+    });
+  }
 }
