@@ -31,8 +31,9 @@
 
 ## Current frontier
 
-- [Full remaining-work plan](../PLAN-jester-completion.md): Drew-only voice/parity, safe EBI control, events and long-run behavior are active. Guest conversation and grants are parked for later. The plan still needs the delivery/receipt, long-prompt, and first-turn runtime gaps split into small repo-scoped outcomes.
-- [Immediate Drew-only voice slice](../PLAN-jester-drew-voice-slice.md): five checked, owner-only voice outcomes can run now in safe copies, independent of the later EBI handoff work.
+- [Full remaining-work plan](../PLAN-jester-completion.md): Drew-only voice/parity, safe EBI control, events and long-run behavior are active. Guest conversation and grants are parked for later. Its EBI delivery/receipt, long-prompt, and first-turn runtime gaps are split into the owner-only API slice below.
+- [Immediate Drew-only voice slice](../PLAN-jester-drew-voice-slice.md): five checked, owner-only voice outcomes were dispatched immediately through `/api/loops` with Codex auto and Claude Sonnet only on Codex usage exhaustion. The bot created worker thread `1554145503506333736` in a safe copy on 2026-09-28. It has not reported completed tasks yet; the live service was not restarted.
+- [Owner-only EBI API slice](../PLAN-jester-owner-ebi-api-slice.md): five checked EBI outcomes for read-only status, first-turn runtime, truthful spoken acceptance, retry receipts and pure stop. It targets an isolated EBI repository copy and has no guest work.
 - [Old overnight manifest](../PLAN-jester-overnight-manifest.md): archived draft only; it contains guest work and must not be dispatched. Drew canceled the timed build. Scheduler tasks 31 and 32 were **deleted and absence verified through `/api/tasks`** on 2026-09-28.
 - [Voice behavior gap audit](wayfinder-jester/research/voice-behavior-gap-audit.md): checks original handoff against the Phase 1 code; dormant attention and transcript-only mode were missing, and new-session work must include actually dispatching the assignment.
 - [Owner feel test](wayfinder-jester/tickets/feel-test-phase1.md): open. Eight completed live turns measured about 2.8 s median to first audio, above the ~1.5 s handoff target; a 10–15 minute owner check is still required before claiming acceptance.
@@ -43,7 +44,7 @@
 - [Voice-to-EBI handoff audit](wayfinder-jester/research/voice-to-ebi-handoff.md): records the typed-equivalent flow and concrete API limits: `/spoken` accepts only 4,000 characters, returns acceptance before asynchronous delivery, and lacks an idempotent request ID; `/spawn` cannot choose the first-turn backend/model in one call.
 - [Spoken prompt shape](wayfinder-jester/tickets/spoken-prompt-shape.md): resolved to one clean, faithful prompt, automatically sent when clear, with no routine readback.
 - [Guest conversation boundary](wayfinder-jester/tickets/guest-conversation-boundary.md): deferred at Drew's request. Guests remain transcribed and may pause recording, but Jester does not answer or grant session access to them in the active build.
-- **Next frontier:** start the independent Drew-only voice slice now; while it runs, close the owner-only spoken-delivery/receipt, long-prompt and first-turn runtime plan gaps. The owner feel test remains the final experience gate. No timed build is pending.
+- **Next frontier:** run the independent owner-only EBI API slice while voice work proceeds, then build Jester's exact-ID client and spoken session actions against those checked interfaces. The owner feel test remains the final experience gate. No timed build is pending.
 - **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
 
 ## Already implemented infrastructure
