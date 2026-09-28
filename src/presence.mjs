@@ -1,0 +1,98 @@
+const LEAVE_PHRASE = /^\s*jester[\s,]+(?:leave|disconnect)\s*[.!?]*\s*$/i;
+
+/** Auto-join and owner escape hatches for one configured Discord voice room. */
+export class Presence {
+  constructor({ client, voice, brain, config, logger = console } = {}) {
+    if (!client || !voice || !brain || !config) {
+      throw new Error("client, voice, brain, and config are required");
+    }
+    this.client = client;
+    this.voice = voice;
+    this.brain = brain;
+    this.config = config;
+    this.logger = logger;
+    this.inPresence = false;
+    this.dismissed = false;
+    this.joined = false;
+    this.joining = null;
+    this.onVoiceState = (_oldState, newState) => this.#voiceState(newState);
+    this.onMessage = (message) => this.#message(message);
+  }
+
+  async start() {
+    this.client.on("voiceStateUpdate", this.onVoiceState);
+    this.client.on("messageCreate", this.onMessage);
+    try {
+      await this.voice.login();
+      const guild = this.client.guilds.cache.get(this.config.guildId);
+      const owner = guild?.members.cache.get(this.config.ownerId);
+      await this.#setPresence(owner?.voice?.channelId === this.config.voiceChannelId);
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
+  }
+
+  stop() {
+    this.client.off("voiceStateUpdate", this.onVoiceState);
+    this.client.off("messageCreate", this.onMessage);
+  }
+
+  /** Consume a clearly addressed owner voice command before it reaches Luna. */
+  async handleOwnerTurn(text) {
+    if (!LEAVE_PHRASE.test(text || "")) return false;
+    await this.leave();
+    return true;
+  }
+
+  async join() {
+    if (!this.inPresence || this.joined || this.joining) return this.joining;
+    this.dismissed = false;
+    this.joining = Promise.resolve(this.voice.connect())
+      .then(async () => {
+        this.joined = true;
+        if (!this.inPresence || this.dismissed) {
+          this.voice.disconnect();
+          this.joined = false;
+          return;
+        }
+        await this.brain.prewarm();
+      })
+      .catch((error) => this.logger.warn?.("[presence] join:", error.message))
+      .finally(() => { this.joining = null; });
+    return this.joining;
+  }
+
+  async leave() {
+    this.dismissed = true;
+    if (this.joining) await this.joining;
+    this.voice.disconnect();
+    this.joined = false;
+  }
+
+  async #voiceState(state) {
+    if (String(state.id) !== String(this.config.ownerId) || state.guild?.id !== this.config.guildId) return;
+    await this.#setPresence(state.channelId === this.config.voiceChannelId);
+  }
+
+  async #setPresence(present) {
+    if (present === this.inPresence) return;
+    this.inPresence = present;
+    if (!present) {
+      this.dismissed = false;
+      if (this.joining) await this.joining;
+      this.voice.disconnect();
+      this.joined = false;
+    } else if (!this.dismissed) {
+      await this.join();
+    }
+  }
+
+  async #message(message) {
+    if (message.author?.bot || String(message.author?.id) !== String(this.config.ownerId) ||
+        message.guildId !== this.config.guildId || message.channelId !== this.config.transcriptChannelId) return;
+    const command = message.content.trim().toLowerCase();
+    if (command === "!jester leave") await this.leave();
+    else if (command === "!jester join" && this.inPresence) await this.join();
+  }
+}

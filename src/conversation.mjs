@@ -30,13 +30,14 @@ function mergeText(first, second) {
  * Worker contract: send({op, ...}); emit parsed messages on `event`.
  */
 export class Conversation {
-  constructor({ worker, brain, voice, ownerId, stallClip = null,
+  constructor({ worker, brain, voice, ownerId, presence = null, stallClip = null,
     logFile = "logs/turns.jsonl", now = () => performance.now(), logger = console } = {}) {
     if (!worker || !brain || !voice || !ownerId) throw new Error("worker, brain, voice, and ownerId are required");
     this.worker = worker;
     this.brain = brain;
     this.voice = voice;
     this.ownerId = String(ownerId);
+    this.presence = presence;
     this.stallClip = stallClip;
     this.logFile = logFile;
     this.now = now;
@@ -125,8 +126,9 @@ export class Conversation {
     }
   }
 
-  #turnEnd(event) {
+  async #turnEnd(event) {
     if (!event.text?.trim()) return;
+    if (await this.presence?.handleOwnerTurn(event.text)) return;
     const text = this.turn?.resumed
       ? mergeText(this.turn.carriedText || this.turn.pauseText, event.text)
       : event.text.trim();

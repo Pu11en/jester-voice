@@ -8,7 +8,7 @@ import { Conversation, heardWords, mergeText } from "./conversation.mjs";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
-function setup({ answers = ["A reply."] } = {}) {
+function setup({ answers = ["A reply."], presence = null } = {}) {
   const worker = new EventEmitter();
   worker.sent = [];
   worker.send = (message) => worker.sent.push(message);
@@ -33,7 +33,7 @@ function setup({ answers = ["A reply."] } = {}) {
     playedMs() { return 600; },
   };
   const events = (ev, payload = {}) => worker.emit("event", { ev, speaker: "owner", ...payload });
-  return { worker, brain, voice, events };
+  return { worker, brain, voice, events, presence };
 }
 
 async function withConversation(options, fn) {
@@ -101,4 +101,14 @@ test("stall cue plays the cached clip and turn metrics are logged", async () => 
 
 test("text merge avoids repeating the overlap", () => {
   assert.equal(mergeText("Tell me about", "about Luna."), "Tell me about Luna.");
+});
+
+test("addressed owner leave command is consumed by presence instead of sent to Luna", async () => {
+  let left = 0;
+  await withConversation({ presence: { async handleOwnerTurn(text) { left++; return text === "Jester, leave"; } } }, async ({ events, brain }) => {
+    events("turn_end", { text: "Jester, leave" });
+    await tick();
+    assert.equal(left, 1);
+    assert.deepEqual(brain.asks, []);
+  });
 });

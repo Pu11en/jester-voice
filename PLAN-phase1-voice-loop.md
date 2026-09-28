@@ -55,7 +55,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - **Stall:** on `thinking`, play a short "mm, one sec" from a cached clip.
   - Log each turn to `logs/turns.jsonl`: end-of-speech→first-audio ms, STT ms, brain first-word ms, TTS first-chunk ms, and barge-in stop ms.
   - Tests use fakes for all three parts, covering the speculative-discard, barge-in and stall paths.
-- [ ] **7. Presence.**
+- [x] **7. Presence.**
   - Auto-join when the owner joins `DISCORD_VOICE_CHANNEL_ID`, and leave when the owner leaves.
   - "Jester, leave" / "Jester, disconnect" (owner, clearly addressed; bare "leave"/"stop" must **not** trigger it) makes Jester leave and not auto-rejoin during this owner presence.
   - Text escape hatch: owner types `!jester leave` / `!jester join` in the transcript channel. Needs the `GuildMessages` + `MessageContent` intents; check that the bot already has them.

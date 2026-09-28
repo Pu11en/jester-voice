@@ -103,7 +103,12 @@ export function createVoice({
   config,
   onAudio = () => {},
   logger = console,
-  client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] }),
+  client = new Client({ intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ] }),
   voice = {
     AudioPlayerStatus, createAudioPlayer, createAudioResource, EndBehaviorType,
     entersState, joinVoiceChannel, NoSubscriberBehavior, StreamType, VoiceConnectionStatus,
@@ -167,7 +172,7 @@ export function createVoice({
   return {
     client,
     player,
-    async connect() {
+    async login() {
       if (!loggedIn) {
         const ready = new Promise((resolve, reject) => {
           client.once("ready", resolve);
@@ -177,6 +182,9 @@ export function createVoice({
         await ready;
         loggedIn = true;
       }
+    },
+    async connect() {
+      await this.login();
       const guild = client.guilds.cache.get(config.guildId);
       if (!guild) throw new Error("Configured Discord guild is unavailable");
       connection = voice.joinVoiceChannel({
