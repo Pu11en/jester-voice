@@ -37,7 +37,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - Add `{"op":"cancel","id"}`: stop generating and drop queued chunks.
   - Pytest: first chunk in under 800 ms after warm-up, and cancel stops output within one chunk.
   - Cap Parakeet's ONNX arena with `gpu_mem_limit` so both fit in 8 GB, and log peak VRAM at startup.
-- [ ] **4. Brain client (Node).** `src/brain.mjs` wraps `codex app-server`, following `bench/bench_brain.py`, which is proven.
+- [x] **4. Brain client (Node).** `src/brain.mjs` wraps `codex app-server`, following `bench/bench_brain.py`, which is proven.
   - Use the lean flags, `thread/start` with a Jester `baseInstructions` persona (spoken, 1–2 sentences, never fake EBI facts), `ephemeral:true`, read-only sandbox and approval `never`.
   - API: `prewarm()`, `ask(text, {speaker}) → async iterator of sentence strings` (split streamed deltas at sentence ends), `interrupt()`, `injectContext(text)`.
   - Stall cue: emits `thinking` if no word has arrived after 2.5 s.
