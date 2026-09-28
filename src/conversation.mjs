@@ -253,12 +253,16 @@ export class Conversation {
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
     }
     if (!this.attention.accept(event.text)) {
-      if (!this.attention.engaged) this.ownerRouter?.reset();
+      if (!this.attention.engaged) {
+        this.ownerRouter?.reset();
+        this.createDraft.reset();
+      }
       if (this.reply) this.#stopReply();
       this.#stopLocalClip();
       await this.#abortDraft();
       return;
     }
+    if (!wasEngaged) this.createDraft.reset();
     const text = this.turn?.resumed
       ? mergeText(this.turn.carriedText || this.turn.pauseText, event.text)
       : event.text.trim();
@@ -274,19 +278,26 @@ export class Conversation {
       // and spawn receipt path as a one-turn request.
       await new Promise(resolve => setTimeout(resolve, 800));
       if (!this.started || speechVersion !== this.ownerSpeechVersion || this.mode !== "conversation") return;
-      const response = await this.ownerRouter.handle(text, {
-        speakerId: this.ownerId,
-        intent: { kind: "create", project: create.project, instruction: create.instruction,
-          runtime: null, model: null },
-        shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
-          this.mode === "conversation" && !this.presence?.paused,
-      });
+      let response;
+      try {
+        response = await this.ownerRouter.handle(text, {
+          speakerId: this.ownerId,
+          intent: { kind: "create", project: create.project, instruction: create.instruction,
+            runtime: null, model: null },
+          shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
+            this.mode === "conversation" && !this.presence?.paused,
+        });
+      } catch (error) {
+        this.logger.warn?.("[conversation] owner route:", error.message);
+        response = "I can't reach the session list right now. Please try again.";
+      }
       if (response && this.started && speechVersion === this.ownerSpeechVersion) this.#speakControl(response, event);
       return;
     }
     const intent = this.ownerRouter ?
       parseOwnerIntent(text, { knownTags: this.attention.sessionTags }) : null;
     if (intent) {
+      this.createDraft.reset();
       await this.#abortDraft();
       if (["message", "stop", "close", "runtime", "create", "dependency", "dependency-group", "result-watch"].includes(intent.kind)) {
         await new Promise(resolve => setTimeout(resolve, 800));

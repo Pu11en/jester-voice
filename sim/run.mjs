@@ -39,6 +39,7 @@ function fixture(scenarioId) {
         created_at: "2026-09-28T18:00:00Z" }];
     },
     async resolveProject(name) {
+      if (scenarioId === "create-error") throw new Error("simulated project lookup failure");
       return name.toLowerCase() === "jobs" ?
         { kind: "local_available", locally_verified: true, path: "/projects/Jobs", name: "Jobs" } :
         { kind: "no_match" };

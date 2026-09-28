@@ -1,3 +1,5 @@
+import { parseOwnerIntent } from "./owner-intent.mjs";
+
 const WAKE = /^(?:(?:hey|hi|hello|yo)\s+)?jester\b[\s,!.:;-]*/i;
 const START = /^(?:open|create|start|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)[.!?]*$/iu;
 const SPOKEN_START = /^(?:uh\s+)?(?:yeah[,\s]+)?open(?: of)? a thread in (?:the )?(.+?) folder[.!?]*$/iu;
@@ -14,6 +16,11 @@ export class CreateDraft {
 
   consume(raw) {
     const text = String(raw || "").trim().replace(WAKE, "").trim();
+    // A complete one-turn request belongs to the normal intent router.
+    if (parseOwnerIntent(raw)?.kind === "create") {
+      this.reset();
+      return { handled: false };
+    }
     const started = START.exec(text) || SPOKEN_START.exec(text);
     if (started) {
       this.pending = { project: started[1].trim(), topic: null };
@@ -26,7 +33,10 @@ export class CreateDraft {
       return { handled: true, reply: "Go ahead." };
     }
     const task = TASK.exec(text);
-    if (!task) return { handled: false };
+    if (!task) {
+      this.reset();
+      return { handled: false };
+    }
     let instruction = task[1].trim();
     const correction = /\bactually\s*[,;:]?\s*/giu;
     const matches = [...instruction.matchAll(correction)];

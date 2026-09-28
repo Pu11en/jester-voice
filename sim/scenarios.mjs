@@ -40,6 +40,50 @@ export const scenarios = [
     ],
   },
   {
+    id: "one-turn-create",
+    title: "A complete create request starts one session immediately",
+    steps: [
+      { speaker: "owner", text: "Jester, create a session in Jobs to review the LinkedIn profile.",
+        expect: { writes: 1, writeKind: "spawn", writeTarget: "Jobs",
+          writeText: ["review the LinkedIn profile"], says: ["queued", "Jobs"], brain: 0 } },
+    ],
+  },
+  {
+    id: "abandoned-create",
+    title: "A Zoro status question cancels an unfinished Jobs request",
+    steps: [
+      { speaker: "owner", text: "Jester, open a session in Jobs.",
+        expect: { writes: 0, says: ["what should"], brain: 0 } },
+      { speaker: "owner", text: "Jester, what is Zoro doing?",
+        expect: { writes: 0, says: ["zoro", "reviewed"], brain: 0 } },
+      { speaker: "owner", text: "Tell it to review the login page.",
+        expect: { writes: 1, writeKind: "spoken", writeTarget: "zoro",
+          writeThreadId: "1553779983158349925", writeText: ["review the login page"], brain: 0 } },
+    ],
+  },
+  {
+    id: "abandoned-create-chat",
+    title: "Unrelated conversation cancels an unfinished Jobs request",
+    steps: [
+      { speaker: "owner", text: "Jester, open a session in Jobs.",
+        expect: { writes: 0, says: ["what should"], brain: 0 } },
+      { speaker: "owner", text: "Could you tell me a joke?",
+        expect: { writes: 0, brain: 1 } },
+      { speaker: "owner", text: "Tell it to review the login page.",
+        expect: { writes: 0, says: ["can't find"], brain: 0 } },
+    ],
+  },
+  {
+    id: "create-error",
+    title: "A project lookup failure gives an answer and sends nothing",
+    steps: [
+      { speaker: "owner", text: "Jester, open a session in Jobs.",
+        expect: { writes: 0, says: ["what should"], brain: 0 } },
+      { speaker: "owner", text: "Have it review the profile.",
+        expect: { writes: 0, says: ["can't reach"], brain: 0 } },
+    ],
+  },
+  {
     id: "correct-target",
     title: "Final target and task win; exact-thread follow-up",
     steps: [
@@ -74,6 +118,18 @@ export const scenarios = [
     steps: [
       { speaker: "owner", text: "Yo Jester, what is Zoro doing?", expect: {
         says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 0,
+      } },
+    ],
+  },
+  {
+    id: "natural-zoro",
+    title: "Natural Zoro questions use checked EBI evidence",
+    steps: [
+      { speaker: "owner", text: "Jester, what is going on with Zoro?", expect: {
+        says: ["zoro", "Drew's Audit", "reviewed"], writes: 0, brain: 0,
+      } },
+      { speaker: "owner", text: "Jester, help me with Zoro's audit", expect: {
+        says: ["zoro", "audit"], writes: 0, brain: 0,
       } },
     ],
   },

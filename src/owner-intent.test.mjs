@@ -25,6 +25,12 @@ test("finds read-only status requests without treating a passing name as an acti
     { kind: "dependency-group", target: "Frankie", instruction: "check the links" });
   assert.deepEqual(parseOwnerIntent("What did it finish?"),
     { kind: "status-last", target: "it" });
+  assert.deepEqual(parseOwnerIntent("Jester, what is going on with Zoro?"),
+    { kind: "status-one", target: "Zoro" });
+  assert.deepEqual(parseOwnerIntent("Jester, help me with Zoro's audit"),
+    { kind: "session-discuss", target: "Zoro" });
+  assert.equal(parseOwnerIntent("Jester, help me with a recipe",
+    { knownTags: new Set(["zoro"]) }), null);
   assert.deepEqual(parseOwnerIntent("When both Zoro and Sanji finish, tell me what I can test"),
     { kind: "result-watch", selection: "named", targets: ["Zoro", "Sanji"] });
   assert.deepEqual(parseOwnerIntent("When Zoro, Sanji, and Frankie finish, tell me what I can test"),

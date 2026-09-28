@@ -1,7 +1,9 @@
 const WAKE = /^(?:(?:hey|hi|hello|okay|ok|yo)\s*[,!.]?\s+)?jester\b[\s,!.:;—–-]*/i;
 const NAME = "([\\p{L}][\\p{L}\\p{N}'-]*)";
 const statusOne = new RegExp(`^(?:what(?:'s| is) |what is )${NAME} (?:doing|working on|up to)[?.!]*$`, "iu");
+const statusNatural = new RegExp(`^what(?:'s| is) (?:going on|happening) with ${NAME}[?.!]*$`, "iu");
 const statusLast = /^(?:what did (?:it|he|she|they) finish|what (?:did|has) (?:it|he|she|they) (?:done|complete))[?.!]*$/iu;
+const discussNatural = /^help me with ([\p{L}][\p{L}\p{N}-]*)(?:['’]s)?(?:\s+.+)?[?.!]*$/iu;
 const discussSession = new RegExp(`^(?:help me (?:figure out|understand)|can you help me with|let's discuss|let's talk about).+?\\b(?:i mean|actually)\\s+${NAME}[?.!]*$`, "iu");
 const CORRECTION = new RegExp(`^(?:actually|no|wait|rather)\\s+${NAME}\\s*[,;:—–-]*\\s*`, "iu");
 const TARGET_CORRECTION = new RegExp(`[,;:—–-]\\s*(?:wait|actually|no)\\s*[,;:—–-]?\\s*${NAME}\\s*[,;:—–-]+\\s*`, "iu");
@@ -32,11 +34,15 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   if (/^(?:update me on (?:my )?sessions|give me a (?:session|sessions) update|what(?:'s| is) happening with (?:my )?sessions)[?.!]*$/i.test(text)) {
     return { kind: "status-all" };
   }
-  const status = statusOne.exec(text);
+  const status = statusOne.exec(text) || statusNatural.exec(text);
   if (status) return { kind: "status-one", target: status[1] };
   if (statusLast.test(text)) return { kind: "status-last", target: "it" };
   const discussion = discussSession.exec(text);
   if (discussion) return { kind: "session-discuss", target: discussion[1] };
+  const naturalDiscussion = discussNatural.exec(text);
+  if (naturalDiscussion && (!knownTags || knownTags.has(naturalDiscussion[1].toLowerCase()))) {
+    return { kind: "session-discuss", target: naturalDiscussion[1] };
+  }
   const stop = STOP.exec(text);
   if (stop) return { kind: "stop", target: stop[1] };
   const close = CLOSE.exec(text);
