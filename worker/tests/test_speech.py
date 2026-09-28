@@ -102,3 +102,70 @@ def test_one_second_pause_after_connector_does_not_end_turn(speech_stack):
     pipeline.feed("kokoro", extra_silence)
     pipeline.check_timeouts()
     assert len([event for event in events if event["ev"] == "turn_end"]) == 1
+
+
+def test_tts_converts_to_discord_stereo_pcm():
+    from worker.speech import OUTPUT_RATE, _sentences, _to_discord_pcm
+
+    pcm = _to_discord_pcm(np.array([0.0, 0.5, -0.5], dtype=np.float32), OUTPUT_RATE)
+    frames = np.frombuffer(pcm, dtype="<i2").reshape(-1, 2)
+    assert frames.shape == (3, 2)
+    assert np.array_equal(frames[:, 0], frames[:, 1])
+    assert frames[:, 1].tolist() == [0, 16383, -16383]
+    assert _sentences("Hello there. How are you? Fine!") == ["Hello there.", "How are you?", "Fine!"]
+
+
+def test_cancel_command_stops_the_active_reply():
+    import threading
+    import time
+
+    from worker.speech import SpeechWorker
+
+    class FakeTTS:
+        lock = threading.Lock()
+
+        @staticmethod
+        def stream(_text, stopped):
+            yield b"first chunk"
+            while not stopped.wait(0.001):
+                pass
+
+    events = []
+    worker = SpeechWorker(None, FakeTTS(), events.append)
+    worker.say("reply-1", "One sentence. More queued speech.")
+    deadline = time.monotonic() + 1
+    while not any(event["ev"] == "audio_out" for event in events) and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert [event["ev"] for event in events] == ["audio_out"]
+
+    started = time.monotonic()
+    worker.cancel("reply-1")
+    while not any(event["ev"] == "say_done" for event in events) and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert (time.monotonic() - started) < 0.1
+    assert [event["ev"] for event in events] == ["audio_out", "say_done"]
+
+
+def test_kokoro_streams_fast_and_honors_cancel_after_a_chunk():
+    import os
+    import time
+    import threading
+
+    from worker.speech import KokoroTTS
+
+    models = Path(os.environ.get(
+        "JESTER_MODELS_DIR", "/home/drewp/main-projects/jester-voice/bench/data/models"
+    ))
+    tts = KokoroTTS(models)
+    warmup = list(tts.stream("Warm up.", threading.Event()))
+    assert warmup
+
+    stopped = threading.Event()
+    stream = iter(tts.stream("This is the first sentence. This should stay queued.", stopped))
+    started = time.perf_counter()
+    first_chunk = next(stream)
+    assert (time.perf_counter() - started) * 1000 < 800
+    assert first_chunk and len(first_chunk) % 4 == 0
+
+    stopped.set()
+    assert next(stream, None) is None
