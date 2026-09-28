@@ -349,9 +349,14 @@ class SpeechPipeline:
 
     def _evaluate_pause(self, speaker: str, state: SpeakerState, now: float) -> None:
         audio = self._audio(state)
+        stt_started = time.perf_counter()
         state.last_text = self.stt.transcribe(audio)
+        stt_ms = round((time.perf_counter() - stt_started) * 1000)
+        turn_started = time.perf_counter()
         state.last_prob = self.turn_scorer.score(audio)
-        self.emit({"ev": "pause", "speaker": speaker, "prob": state.last_prob, "text": state.last_text})
+        turn_ms = round((time.perf_counter() - turn_started) * 1000)
+        self.emit({"ev": "pause", "speaker": speaker, "prob": state.last_prob, "text": state.last_text,
+                   "ms": {"stt": stt_ms, "smart_turn": turn_ms}})
         silence_ms = max(0.0, (now - state.silence_started) * 1000) if state.silence_started is not None else 0.0
         last_word = state.last_text.lower().strip().split()[-1].strip(".,!?;:'\"()[]{}") if state.last_text.strip() else ""
         timeout_ms = CONNECTOR_TIMEOUT_MS if state.last_prob < 0.05 and last_word in CONNECTORS else NORMAL_TIMEOUT_MS

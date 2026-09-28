@@ -170,6 +170,7 @@ export class Brain extends EventEmitter {
             if (!firstWord && /\S/.test(delta)) {
               firstWord = true;
               clearTimeout(stallTimer);
+              this.emit("firstWord", { threadId, speaker, at: Date.now() });
             }
             remainder += delta;
             let match;

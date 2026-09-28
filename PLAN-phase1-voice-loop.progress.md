@@ -9,3 +9,5 @@
 
 ## **5. Discord voice I/O (Node).** `src/voice.mjs`: (built alongside other steps)
 - — the step is finished and committed
+
+- Task 6, Conversation loop: added the owner-only worker/brain/voice coordinator, speculative replies held until turn end and discarded/merged when speech resumes, immediate barge-in stop/cancel/interrupt with a heard-word estimate in context, cached stall-clip playback, and JSONL turn timing logs. Added first-word and STT timing measurements to their existing event paths. `npm test --silent` passed (12 tests); `bash scripts/check.sh` passed (Node: 12; pytest: 6); `git diff --check` passed. Commit: `Connect Jester voice conversation loop`. Open: the integration layer must provide the worker event/send adapter and cached stall PCM clip; live Discord/model checks remain unrun by design.

@@ -49,7 +49,7 @@ Everything is decided by the benchmarks in `bench/*_RESULTS.md`; read those befo
   - Playback: `AudioPlayer` fed from a PCM stream per reply. `stopNow()` stops playback immediately, and it tracks how many ms of each reply actually played.
   - Unit-test the resample/downmix and the "played ms" math.
   - Add `scripts/smoke-voice.sh`: joins, plays a 1 s tone, leaves. Run by hand only.
-- [ ] **6. Conversation loop.** `src/conversation.mjs` wires worker ↔ brain ↔ voice, **owner-only for now** (guests are ignored this phase).
+- [x] **6. Conversation loop.** `src/conversation.mjs` wires worker ↔ brain ↔ voice, **owner-only for now** (guests are ignored this phase).
   - **Speculative start:** on the owner's `pause` with prob > 0.3, start `brain.ask`, but hold the audio until `turn_end`. If speech resumes, discard the draft (`interrupt`) and merge the text into the next ask.
   - **Barge-in:** a `speech_start` from the owner while Jester is speaking triggers `voice.stopNow()` + worker `cancel` + `brain.interrupt()`. Record only the words actually heard, estimated from played ms, as Jester's turn in context via `injectContext`.
   - **Stall:** on `thinking`, play a short "mm, one sec" from a cached clip.
