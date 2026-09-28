@@ -1,6 +1,6 @@
 # Jester voice behavior gap audit — 2026-09-28
 
-This compares `HANDOFF.md` and `REPLACES_OLD_VOICE.md` with the current Phase 1 code and the paused completion plan. It records product behavior, not permission to start the scheduled build.
+This compares `HANDOFF.md` and `REPLACES_OLD_VOICE.md` with the current Phase 1 code and the completion plan. It records product behavior; the overnight build schedule is tracked in the Wayfinder map.
 
 ## What works today
 
@@ -21,8 +21,8 @@ This compares `HANDOFF.md` and `REPLACES_OLD_VOICE.md` with the current Phase 1 
 - **Hands-off EBI work:** Jester cannot yet resolve a spoken tag to an exact live session ID, report status, send a task, create **and start** a new session, stop/close/change it, bind pronouns to the exact session, find past work, give completion/failure updates, or run a requested dependency like “when Zoro finishes, tell Sanji.” The plan covers each as typed, identity-checked operations. Creating a new empty thread alone is insufficient; the revised creation task includes sending the assignment and confirming work started.
 - **Long-running reliability:** state and meaningful missed events must recover after restart, stale tags must not be reused as identities, guest grants must be checked at the EBI boundary, and no unattended job may silently switch to a paid brain. The existing plan covers these but completion must be demonstrated with offline checks and a supervised live acceptance pass.
 
-## One product boundary still to settle
+## Direct-tag boundary settled
 
-- **Direct tag while dormant:** the old bot treated `Zoro, ...` as an immediate command, while the new owner clarification says a fresh conversation starts with `Jester`. The current handoff supports tag navigation during an active Jester conversation but does not settle whether a tag itself wakes Jester after a lull. Decide this before accepting the EBI routing behavior. Until then, require `Jester` to wake a dormant conversation and never dispatch a tag command from ambient speech.
+- **Owner choice C (2026-09-28):** `Zoro, ...` addresses a session directly only during an active Jester conversation. After a lull, `Jester` is required to wake the conversation again. Dormant or transcript-only tag speech is recorded under the room-transcript policy but never sent to Luna or EBI as an instruction. A tag mentioned in passing is not a command.
 
 OpenAI's current [Voice guidance](https://help.openai.com/en/articles/20001274-chatgpt-voice) describes natural back-and-forth and interruption but notes that background or other-speaker speech may cause unintended responses. Its [voice-agent guidance](https://developers.openai.com/api/docs/guides/voice-prompting) explicitly treats side conversations and speech not addressed to the assistant as non-speaking turns. Jester's explicit dormant gate and transcript-only mode are Drew's requirements and must be enforced by Jester code, not assumed to come from a model.

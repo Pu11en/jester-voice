@@ -153,7 +153,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "id": "jester.04",
       "plan_id": "jester",
       "plan_version": 1,
-      "outcome": "Add conversational attention. On join and after an exchange ends, require an addressed Jester before Luna or speech. Allow natural follow-ups during an active exchange, then re-arm after a lull or clear ending; ambient speech must not extend engagement. Keep all-speaker room transcription independent. Test wake, follow-up, pause, re-arm, side conversation and owner priority with fake brain and mixed-speaker events. Repo: Jester.",
+      "outcome": "Add conversational attention. On join and after an exchange ends, require an addressed Jester before Luna or speech; a session tag alone does not wake Jester. Allow natural follow-ups during an active exchange, then re-arm after a lull or clear ending; ambient speech must not extend engagement. Keep all-speaker room transcription independent. Test wake, follow-up, pause, re-arm, dormant tag speech, side conversation and owner priority with fake brain and mixed-speaker events. Repo: Jester.",
       "dependencies": [
         "jester.03"
       ],
@@ -475,7 +475,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "id": "jester.14",
       "plan_id": "jester",
       "plan_version": 1,
-      "outcome": "Message the right session.. “Tell Zoro…” sends the final text through EBI's `/spoken` path with Drew's true identity, the exact resolved thread ID and queue/interrupt semantics. Confirm the result aloud; duplicate delivery after a retry is prevented. Repo: Jester.",
+      "outcome": "Message the right session. During an active Jester conversation, both Tell Zoro and a direct Zoro instruction send only the final corrected task through EBI /spoken with the real speaker identity, the exact resolved thread ID, and queue/interrupt semantics. A passing tag mention, dormant tag utterance or transcript-only speech sends nothing. Confirm the result aloud and prevent duplicate delivery after retry. Repo: Jester.",
       "dependencies": [
         "jester.13"
       ],
@@ -739,7 +739,7 @@ Done when: Every manifest task is accepted; each repository's offline check pass
       "id": "jester.27",
       "plan_id": "jester",
       "plan_version": 1,
-      "outcome": "Finish an offline integration review of wake/re-arm, transcript-only mode, streaming voice, transcript privacy, allwork parsing, exact EBI actions, permissions, events and restart behavior. Record measured live checks and the owner feel test as pending rather than claiming they passed.",
+      "outcome": "Finish an offline integration review of wake/re-arm, active-only direct tag routing, transcript-only mode, streaming voice, transcript privacy, allwork parsing, exact EBI actions, permissions, events and restart behavior. Record measured live checks and the owner feel test as pending rather than claiming they passed.",
       "dependencies": [
         "jester.26",
         "allwork.09"

@@ -32,19 +32,20 @@
 ## Current frontier
 
 - [Full remaining-work plan](../PLAN-jester-completion.md): 28 small outcomes across voice/parity, safe EBI control, events and long-run behavior. The overnight manifest below assigns its 27 automated outcomes to repository-specific work copies; Drew's feel test is the remaining human outcome.
-- [Overnight execution manifest](../PLAN-jester-overnight-manifest.md): 27 automated tasks across Jester, EBI and allwork in separate repository copies, with dependency checks and automatic local integration on success. It now includes explicit wake/re-arm acceptance and a distinct transcript-only mode. One-shot scheduler tasks 31 (17:00 build) and 32 (next-morning check) were created, then **disabled on 2026-09-28** when Drew asked to grill the details before running. Re-enable or replace them only after the revised scope and acceptance bar are settled.
+- [Overnight execution manifest](../PLAN-jester-overnight-manifest.md): 27 automated tasks across Jester, EBI and allwork in separate repository copies, with dependency checks and automatic local integration on success. It includes wake/re-arm acceptance, active-only direct tags, and a distinct transcript-only mode. One-shot scheduler task 31 is **enabled for 2026-09-28 17:00 CDT**; task 32 is **enabled for 2026-09-29 07:30 CDT** to check integration. Both were verified through `/api/tasks` after validation. The build has not started yet.
 - [Voice behavior gap audit](wayfinder-jester/research/voice-behavior-gap-audit.md): checks original handoff against the Phase 1 code; dormant attention and transcript-only mode were missing, and new-session work must include actually dispatching the assignment.
 - [Owner feel test](wayfinder-jester/tickets/feel-test-phase1.md): open. Eight completed live turns measured about 2.8 s median to first audio, above the ~1.5 s handoff target; a 10–15 minute owner check is still required before claiming acceptance.
 - [Allwork trigger decision](wayfinder-jester/tickets/allwork-trigger-at-cutover.md): resolved to Goku for the existing trigger; the new idea-saving feature remains canceled. The installed trigger still matches “Jester” until the build task runs.
 - [EBI interface decision](wayfinder-jester/tickets/may-jester-change-ebi.md): resolved to narrow local, tested EBI changes for status, pure stop and guest grants, with live activation separated from the unattended build.
-- **Next frontier:** settle whether a direct tag such as `Zoro, ...` wakes Jester when it is dormant; then finish the full experience and morning acceptance bar with Drew before re-enabling or replacing the schedule. The owner feel test remains the final experience gate.
+- **Direct-tag decision:** Drew chose tag instructions only while Jester is already engaged. Dormant tag speech remains transcript only.
+- **Next frontier:** let the scheduled build run, report any blocked task precisely, then perform the owner feel test before claiming the experience is accepted.
 - **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
 
 ## Already implemented infrastructure
 
 - The Jester user service is enabled, crash-restarts and joins the configured Discord room. The old service is archived, so no second Discord application or token is needed.
 - Local STT, turn detection, TTS and Codex app-server brain are integrated; offline checks run with `bash scripts/check.sh`.
-- The complete product and remaining gaps are captured in the full plan; a live feel test and the direct-tag wake boundary remain open.
+- The complete product and remaining gaps are captured in the full plan; the live feel test remains open.
 - **Lean Codex profile:** stop the 8 MCP servers from loading for Jester's brain without breaking the shared login.
 
 ## Out of scope
