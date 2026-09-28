@@ -61,3 +61,19 @@ test("uncertain delivery retries the same request ID; failed source blocks dispa
     await deps.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("just-listen cancellation prevents a queued follow-on task", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const calls = [];
+  const client = { snapshot: async () => [{ threadId: destinationId, closed: false }],
+    sendSpoken: async payload => { calls.push(payload); return { status: "posted" }; } };
+  try {
+    const deps = new Dependencies({ client, ownerId, file: join(dir, "dependencies.json") });
+    await deps.start();
+    await deps.add({ sourceId, destinationId, task: "run the checks" });
+    await deps.cancelPending();
+    await deps.accepted(sourceId);
+    assert.equal(calls.length, 0);
+    await deps.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

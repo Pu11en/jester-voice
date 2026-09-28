@@ -212,6 +212,7 @@ export class Conversation {
     const requestedMode = modeCommand(event.text);
     if (requestedMode) {
       this.mode = requestedMode;
+      if (requestedMode === "transcript") await this.ownerRouter?.dependencies?.cancelPending?.();
       this.transcript?.setMode?.(requestedMode);
       this.attention.reset();
       this.ownerRouter?.reset();

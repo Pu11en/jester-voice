@@ -101,6 +101,16 @@ test("named owner task routes after final speech; transcript-only and guests do 
   });
 });
 
+test("just-listen cancels previously scheduled follow-on work", async () => {
+  let canceled = 0;
+  const ownerRouter = { reset() {}, sessionTags: async () => [],
+    dependencies: { async cancelPending() { canceled++; } } };
+  await withConversation({ ownerRouter }, async ({ events }) => {
+    events("turn_end", { text: "Jester just listen" });
+    await waitUntil(() => canceled === 1, "pending work cancellation");
+  });
+});
+
 test("accepted first sentence reaches Kokoro while Luna is still composing later speech", async () => {
   let releaseSecond;
   const secondReady = new Promise((resolve) => { releaseSecond = resolve; });

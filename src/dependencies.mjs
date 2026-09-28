@@ -64,6 +64,17 @@ export class Dependencies {
     if (changed) await this.#save();
   }
 
+  async cancelPending() {
+    let changed = false;
+    for (const item of this.items) {
+      if (item.status === "pending" || item.status === "dispatching") {
+        item.status = "canceled";
+        changed = true;
+      }
+    }
+    if (changed) await this.#save();
+  }
+
   async reconcile() {
     for (const item of this.items) {
       if (item.status === "dispatching" && this.now() >= item.nextRetryAt) {
@@ -73,6 +84,7 @@ export class Dependencies {
   }
 
   async #dispatch(item) {
+    if (item.status !== "dispatching") return;
     try {
       const target = (await this.client.snapshot()).find(s => s.threadId === item.destinationId);
       if (!target || target.closed) {
@@ -80,14 +92,17 @@ export class Dependencies {
         await this.#save();
         return;
       }
+      if (item.status !== "dispatching") return;
       const receipt = await this.client.sendSpoken({ threadId: item.destinationId,
         speakerId: this.ownerId, text: item.task, requestId: item.requestId });
-      if (receipt.status === "posted") item.status = "posted";
-      else if (receipt.status === "failed") item.status = "blocked";
-      else item.nextRetryAt = this.now() + 5_000;
+      if (item.status === "dispatching") {
+        if (receipt.status === "posted") item.status = "posted";
+        else if (receipt.status === "failed") item.status = "blocked";
+        else item.nextRetryAt = this.now() + 5_000;
+      }
     } catch (error) {
       this.logger.warn?.("[dependencies] delivery uncertain:", error.message);
-      item.nextRetryAt = this.now() + 10_000;
+      if (item.status === "dispatching") item.nextRetryAt = this.now() + 10_000;
     }
     await this.#save();
   }
