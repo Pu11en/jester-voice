@@ -1,5 +1,7 @@
 # Jester Voice
 
+> **Current status, known problems and how to test: [STATUS-2026-09-29.md](STATUS-2026-09-29.md).**
+
 A low-latency conversational Discord voice interface for the existing EBI/ccdb agent system.
 
 ## Goal
