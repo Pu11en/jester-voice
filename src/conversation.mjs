@@ -7,6 +7,9 @@ import { Attention, modeCommand, possibleModeCommand } from "./attention.mjs";
 import { parseOwnerIntent, isSessionReadFollowUp } from "./owner-intent.mjs";
 import { CreateDraft } from "./create-draft.mjs";
 import { BRAIN_OUT_LINE } from "./owner-router.mjs";
+
+const OUTAGE_REASONS = new Set(["usageLimitExceeded", "rateLimitExceeded", "sessionBudgetExceeded",
+  "unreachable", "authFailed", "billing", "timeout"]);
 import { isAffirmative, isBackchannelOnly, isNegative, isStopSpeech, stripLeadingBackchannel }
   from "./backchannel.mjs";
 
@@ -516,12 +519,24 @@ export class Conversation {
     }
   }
 
+  /** An interrupted turn can still be winding down; wait for it once instead of failing. */
+  async *#ask(text, options) {
+    try {
+      yield* this.brain.ask(text, options);
+    } catch (error) {
+      if (error?.reason !== "busy") throw error;
+      try { await this.brain.interrupt?.(); } catch { /* the retry reports its own failure */ }
+      await new Promise(resolve => setTimeout(resolve, 500));
+      yield* this.brain.ask(text, options);
+    }
+  }
+
   async #runDraft(turn, text, context = null) {
     turn.requestId = `voice-turn-${++this.turnNumber}`;
     try {
       await this.interrupting;
       if (this.turn !== turn || turn.resumed) return;
-      for await (const sentence of this.brain.ask(text, { speaker: this.ownerId,
+      for await (const sentence of this.#ask(text, { speaker: this.ownerId,
         requestId: turn.requestId, context })) {
         if (this.turn !== turn || turn.resumed) return;
         // A completed sentence also proves words arrived, even for a brain adapter
@@ -655,7 +670,8 @@ export class Conversation {
     if (!this.reply?.streamEnded) return;
     const done = this.reply;
     this.reply = null;
-    const heard = heardWords(done.text, this.voice.playedMs(done.id));
+    // The reply played to its end, so every word was said; the estimate is for cut-off replies.
+    const heard = done.text.trim();
     if (heard) void this.transcript?.record("Jester", heard);
     this.questionEndedAt = done.text.trim().endsWith("?") ? this.now() : null;
     void this.#log({
@@ -702,7 +718,8 @@ export class Conversation {
     const event = { text: turn.finalText, ms: { stt: turn.sttMs, utterance: turn.utteranceMs },
       ...turn.facts };
     void (async () => {
-      let line = BRAIN_OUT_LINE;
+      // Only a real outage is "Luna is out"; any other failure just asks again.
+      let line = OUTAGE_REASONS.has(reason) ? BRAIN_OUT_LINE : "Sorry, I lost that. Please say it again.";
       if (STATUS_KINDS.includes(turn.intent?.kind) && this.ownerRouter?.statusSentence) {
         try {
           line = await this.ownerRouter.statusSentence(turn.intent, { allowReference: turn.allowReference });

@@ -139,6 +139,17 @@ export class OwnerRouter {
     return sessions.filter(s => !s.closed).flatMap(s => [s.tag, ...s.aliases]).filter(Boolean);
   }
 
+  /** Nothing open answers to that name: say so, and say what is open instead. */
+  async #notFound(name) {
+    const lead = PRONOUNS.has(String(name).toLowerCase()) ? "I'm not sure which session you mean."
+      : `There's no open session called ${name}.`;
+    let open = [];
+    try { open = (await this.client.snapshot()).filter(isOpen); } catch { /* the plain answer still holds */ }
+    const named = open.map(row => `${displayName(row) || "an unnamed session"}${row.tag ? ` (${row.tag})` : ""}`);
+    if (!named.length) return `${lead} No sessions are open right now.`;
+    return `${lead} Open now: ${andJoin(named.slice(0, 5))}.`;
+  }
+
   async #target(name, allowReference) {
     if (PRONOUNS.has(name.toLowerCase())) {
       if (!allowReference || !this.bound || this.now() > this.bound.until) return { kind: "unknown" };
@@ -156,7 +167,7 @@ export class OwnerRouter {
   async readContext(intent, { allowReference = false } = {}) {
     const resolved = await this.#target(intent.target, allowReference);
     if (resolved.kind === "ambiguous") return { kind: "answer", text: `More than one session matches ${intent.target}. Which one do you mean?` };
-    if (resolved.kind !== "found") return { kind: "answer", text: `I can't find an open session named ${intent.target}.` };
+    if (resolved.kind !== "found") return { kind: "answer", text: await this.#notFound(intent.target) };
     const session = resolved.session;
     this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
     try {
@@ -172,7 +183,7 @@ export class OwnerRouter {
   async statusSentence(intent, { allowReference = false } = {}) {
     const resolved = await this.#target(intent.target, allowReference);
     if (resolved.kind === "ambiguous") return `More than one session matches ${intent.target}. Please name the exact one.`;
-    if (resolved.kind !== "found") return `I can't find an open session named ${intent.target}.`;
+    if (resolved.kind !== "found") return this.#notFound(intent.target);
     return this.#describe(resolved.session);
   }
 
@@ -501,7 +512,7 @@ export class OwnerRouter {
     }
     const resolved = await this.#target(intent.target, allowReference);
     if (resolved.kind === "ambiguous") return `More than one session matches ${intent.target}. Please name the exact one.`;
-    if (resolved.kind !== "found") return `I can't find an open session named ${intent.target}.`;
+    if (resolved.kind !== "found") return this.#notFound(intent.target);
     const session = resolved.session;
     const name = session.tag || session.name || "that session";
     if (["status-one", "status-last", "session-discuss"].includes(intent.kind)) return this.#describe(session);

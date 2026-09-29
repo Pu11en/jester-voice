@@ -1,4 +1,7 @@
 const WAKE = /^(?:(?:hey|hi|hello|okay|ok|yo)\s*[,!.]?\s+)?jester\b[\s,!.:;—–-]*/i;
+/** Spoken fillers ("uh", "um") carry no meaning, so they never hide a command. */
+const SPOKEN_FILLER = /^(?:(?:u+h+|u+m+|u+h+m+|e+r+m*|h+m+|m{2,}|a+h+)\b[\s,.!…-]*)+/iu;
+const clean = raw => String(raw || "").trim().replace(SPOKEN_FILLER, "").replace(WAKE, "").replace(SPOKEN_FILLER, "").trim();
 const NAME = "([\\p{L}][\\p{L}\\p{N}'-]*)";
 const statusOne = new RegExp(`^(?:what(?:'s| is) |what is )${NAME} (?:doing|working on|up to)[?.!]*$`, "iu");
 const statusNatural = new RegExp(`^what(?:'s| is) (?:going on|happening) with ${NAME}[?.!]*$`, "iu");
@@ -10,7 +13,7 @@ const TARGET_CORRECTION = new RegExp(`[,;:—–-]\\s*(?:wait|actually|no)\\s*[,
 const TELL = new RegExp(`^(?:and\\s+)?(?:tell|ask|message)\\s+${NAME}(?:\\s+to\\s+|\\s+that\\s+|[,;:—–-]\\s*|\\s+|$)`, "iu");
 const DIRECT = new RegExp(`^(?:and\\s+)?${NAME}\\s*[,;:!?—–-]\\s*`, "iu");
 const STOP = new RegExp(`^(?:stop|interrupt)(?:\\s+the)?(?:\\s+current)?(?:\\s+turn\\s+(?:in|for))?\\s+${NAME}[?.!]*$`, "iu");
-const CLOSE = new RegExp(`^(?:close|archive|end)(?:\\s+the)?(?:\\s+session)?\\s+${NAME}[?.!]*$`, "iu");
+const CLOSE = new RegExp(`^(?:(?:can|could|would) you\\s+|please\\s+)?(?:close|archive|end)(?:\\s+out)?(?:\\s+the)?(?:\\s+session)?\\s+${NAME}(?:\\s+please)?(?:[?.!]+(?:\\s.*)?)?$`, "iu");
 const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(codex|claude|sonnet|deepseek|dsh)(?:\\s+(sonnet|opus|haiku|auto))?[?.!]*$`, "iu");
 const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
 const CREATE_EMPTY = /^(?:start|create|open|make)(?: me)?(?: an?| the)?(?: new)? (?:empty|blank) (?:session|thread) (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)?[?.!]*$/iu;
@@ -99,7 +102,7 @@ function resultTargets(raw) {
 
 /** Contextual read questions after a named session was just discussed. */
 export function isSessionReadFollowUp(raw) {
-  const text = String(raw || "").trim().replace(WAKE, "").trim();
+  const text = clean(raw);
   if (/^(?:why|tell me more|what should i do next)[?.!]*$/iu.test(text)) return true;
   return /^(?:what|how|why|is it|did it|tell me|explain|help me|should i)\b/i.test(text) &&
     /\b(?:this project|that project|the project|its work|its result|it finish|it do|it working|it blocked|next step|next decision|that result)\b/i.test(text);
@@ -107,7 +110,7 @@ export function isSessionReadFollowUp(raw) {
 
 /** Pure first pass. No model text or transcript event can execute an action here. */
 export function parseOwnerIntent(raw, { knownTags = null } = {}) {
-  const text = String(raw || "").trim().replace(WAKE, "").trim();
+  const text = clean(raw);
   if (/\b(?:but|wait|hold on)[,;\s]+(?:don['’]?t|do\s+not)\s+(?:send|post|give|dispatch)\b/iu.test(text) ||
       /\b(?:hold off|wait before (?:sending|posting))\b/iu.test(text)) {
     return { kind: "clarify", reason: "hold" };

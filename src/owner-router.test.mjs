@@ -73,7 +73,8 @@ test("posts one faithful task to the exact resolved thread and binds follow-up",
     "I posted your task to franky.");
   assert.equal(calls[1].threadId, franky.threadId);
   setNow(61_000);
-  assert.match(await router.handle("Tell him to retry", { speakerId: ownerId, allowReference: true }), /can't find/);
+  assert.match(await router.handle("Tell him to retry", { speakerId: ownerId, allowReference: true }),
+    /^I'm not sure which session you mean\. Open now: /);
   assert.equal(calls.length, 2);
 });
 
@@ -155,7 +156,8 @@ test("final corrected task wins while changed and ambiguous targets do not dispa
   assert.match(await router.handle("Tell Frankie to deploy—actually just test", { speakerId: ownerId }), /posted/);
   assert.equal(calls[0].text, "just test");
   setRows([{ ...franky, closed: true }, zoro]);
-  assert.match(await router.handle("Tell Frankie to check", { speakerId: ownerId }), /can't find/);
+  assert.equal(await router.handle("Tell Frankie to check", { speakerId: ownerId }),
+    "There's no open session called Frankie. Open now: Zoro (zoro).");
   setRows([franky, { ...zoro, tag: "franky" }]);
   assert.match(await router.handle("Tell Frankie to check", { speakerId: ownerId }), /More than one/);
   assert.equal(calls.length, 1);
@@ -459,7 +461,7 @@ test("statusSentence speaks the deterministic status line without a brain", asyn
     "franky is running. Task: Checking login");
   assert.equal(await router.statusSentence({ kind: "status-last", target: "it" }, { allowReference: true }),
     "franky is running. Task: Checking login", "the status line binds the session for follow-ups");
-  assert.match(await router.statusSentence({ kind: "session-discuss", target: "Nami" }), /can't find an open session named Nami/);
+  assert.match(await router.statusSentence({ kind: "session-discuss", target: "Nami" }), /^There's no open session called Nami\. Open now: /);
 });
 
 test("a detected brain outage gets the honest Luna line while a misparse asks again", async () => {

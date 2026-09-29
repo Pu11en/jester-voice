@@ -140,7 +140,7 @@ export const scenarios = [
       { speaker: "owner", text: "Could you tell me a joke?",
         expect: { writes: 0, brain: 1 } },
       { speaker: "owner", text: "Tell it to review the login page.",
-        expect: { writes: 0, says: ["can't find"], brain: 0 } },
+        expect: { writes: 0, says: ["not sure which session"], brain: 0 } },
     ],
   },
   {

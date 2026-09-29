@@ -134,3 +134,14 @@ test("an action whose task words mention tags or sessions is never hijacked by a
   assert.deepEqual(parseOwnerIntent("Do you have podlox open?", live), { kind: "see-one", target: "podlox" });
   assert.deepEqual(parseOwnerIntent("How come there's no tag on podlox?", live), { kind: "why-no-tag", target: "podlox" });
 });
+
+test("a spoken filler before or after the wake word never hides a command", () => {
+  const tags = new Set(["zoro"]);
+  assert.deepEqual(parseOwnerIntent("Uh explain to me what's going on with Zoro.", { knownTags: tags }),
+    { kind: "session-discuss", target: "zoro" });
+  assert.deepEqual(parseOwnerIntent("Um, Jester, uh, what's open?", { knownTags: tags }).kind, "list-open");
+  assert.deepEqual(parseOwnerIntent("Yo, Jester, can you close out Frankie? I don't know what that is.", { knownTags: tags }),
+    { kind: "close", target: "Frankie" });
+  assert.equal(parseOwnerIntent("close podlox and then start a new one", { knownTags: tags }), null);
+  assert.deepEqual(parseOwnerIntent("Jester, stop Zoro", { knownTags: tags }), { kind: "stop", target: "Zoro" });
+});
