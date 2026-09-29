@@ -975,3 +975,23 @@ test("tentative mode commands stay local even during an engaged exchange", async
     assert.equal(conversation.mode, "conversation");
   });
 });
+
+test("a stalled player drops the reply once 8 MB of speech is pending", async () => {
+  await withConversation({ answers: ["A long reply."] }, async ({ events, worker, voice, brain, conversation }) => {
+    voice.playedMs = () => 0; // Discord playback has stalled.
+    events("turn_end", { text: "Question?", ms: { utterance: 400 } });
+    await tick();
+    const say = worker.sent.find((message) => message.op === "say");
+    const chunk = Buffer.alloc(1024 * 1024).toString("base64");
+    let written = 0;
+    for (let i = 0; i < 9 && conversation.reply; i += 1) {
+      worker.emit("event", { ev: "audio_out", id: say.id, pcm: chunk });
+      if (conversation.reply) written += 1;
+    }
+    await tick();
+    assert.equal(conversation.reply, null, "the reply is dropped, not buffered without bound");
+    assert.ok(written <= 8, `at most 8 MB reached the player (${written} MB)`);
+    assert.ok(voice.stopped >= 1);
+    assert.ok(brain.interrupts >= 1);
+  });
+});

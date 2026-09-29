@@ -91,7 +91,7 @@ is a product decision, not a way to hide a missing current requirement.
 | Requirement / source | Implementation | Existing exact test anchor / evidence | Remaining gap |
 | --- | --- | --- | --- |
 | Owner arrival/departure (H Presence) | presence.mjs | presence.test: `joins and prewarms when owner arrives...` — OFFLINE | Actual Discord cache/event sequencing |
-| Intentional leave, no same-visit rejoin (H Presence) | presence.mjs | `spoken leave remains dismissed...` — OFFLINE | Disconnect failures and persistence write failure |
+| Intentional leave, no same-visit rejoin (H Presence) | presence.mjs | `spoken leave remains dismissed...`; JV-06 `owner leave disconnects even when the dismissal cannot be saved`, `concurrent rejoin requests after a leave connect once`, `owner departure after a leave survives a failed dismissal save` — OFFLINE | Voice disconnect API failure itself |
 | Restart absent then new visit (H Presence/recovery) | presence.mjs | JV-01 — FAIL baseline; candidate regression pass | Live activation |
 | Owner typed escape hatch (H Presence) | presence.mjs | `text escape hatch is restricted...` — OFFLINE | Live permissions |
 | Same-presence reconnect preserves transcript (H mode/R) | presence.mjs | `rejoins after voice transport failure...` — OFFLINE | Concurrent leave/join races |
@@ -100,7 +100,7 @@ is a product decision, not a way to hide a missing current requirement.
 | Side conversation/lull/end stops engagement (H attention) | attention/conversation.mjs | `ambient speech does not extend...`, `explicit side talk...` — OFFLINE | Acoustic/multi-person trial |
 | Engaged tag instructions; mentions do not act (H direct tags) | owner-intent/conversation.mjs | `named owner task routes...`, `finds read-only status requests...` — OFFLINE | Wider ambiguous phrasing corpus |
 | Finality, dropped audio and corrections (H spoken text) | conversation/owner-intent.mjs | `dropped owner audio...`, `final corrected task wins...` — OFFLINE | Real STT constraints/final corrections |
-| Faithful natural proposal (H spoken text) | intent-proposer/owner-router.mjs | `natural assignment becomes...`, `discussion, invented task text...` — OFFLINE | Constraints before extracted span; adversarial proposal review |
+| Faithful natural proposal (H spoken text) | intent-proposer/owner-router.mjs | `natural assignment becomes...`, `discussion, invented task text...`; JV-07 `a proposed instruction must be whole owner words...` — OFFLINE | Constraints before extracted span |
 | Exact speaker authority (H permissions) | conversation/owner-router.mjs | `reads current session facts and ignores another speaker` — OFFLINE | End-to-end Discord speaker attribution |
 | Ambiguous target asks, no guessed action (H authority) | owner-router/ebi-client.mjs | `unknown, duplicate, closed, and numeric IDs...` — OFFLINE | Whole-flow clarification correctness |
 | Names/Frankie resolve canonical string ID (H tags/L) | ebi-client.mjs | `resolves Frankie to the current exact string ID...` — OFFLINE | Live tag pool currently inconsistent in EBI |
@@ -108,9 +108,10 @@ is a product decision, not a way to hide a missing current requirement.
 | Current status/result grounded (H brain) | session-reader/owner-router.mjs | `reads the substantive result...`, `reports missing evidence...` — OFFLINE | Prompt-injection and clipping review |
 | Historical reference (H historical) | owner-router/ebi-client.mjs | `history lookup uses EBI search...` — OFFLINE | Natural time/topic disambiguation corpus |
 | Verified project + create first task (H creation) | owner-router/ebi-client.mjs | `creates a Codex session only in a verified project...` — OFFLINE | Cross-repo backend/model-before-first-turn proof |
+| Create/runtime backend and model choice (H creation/control) | owner-intent/owner-router/ebi-client.mjs | same create test passes `backend: "claude", model: "sonnet"`; `runtime change and close apply only to the named session` — OFFLINE | EBI applying model before the first turn is covered only by EBI-side tests, not an end-to-end run |
 | Empty create invents no task (S/L) | owner-router/ebi-client.mjs | `an explicit empty session creates no invented first task` — OFFLINE | Current tag exhaustion/live receipt |
 | Stop/close/runtime exact target (H control) | owner-router.mjs | `stop sends no prompt...`, `runtime change and close...` — OFFLINE | EBI lifecycle/runtime continuity defects remain |
-| Truthful accepted/posted/unknown receipts (H brain/S) | owner-router/ebi-client.mjs | `lost spoken response...`, `missing EBI receipt...` — OFFLINE | Distinct action vs repeated phrase semantics |
+| Truthful accepted/posted/unknown receipts (H brain/S) | owner-router/ebi-client.mjs | `lost spoken response...`, `missing EBI receipt...`; JV-07 `a repeated identical task says it was not sent again` — OFFLINE | Owner policy for deliberate repeats inside the 5-minute window |
 | Stable retry identity, no duplicate create (H recovery) | action-journal/owner-router.mjs | `uncertain action keeps its identity...`, `lost session creation...`, JV-05 disk failure/concurrency regressions — OFFLINE | Process-level multi-writer and fsync/power-loss assumptions; completed-action repeat policy |
 | Just-listen deterministic; cancels audio/actions (H mode) | conversation/dependencies.mjs | `just listen cancels current and queued speech...` — OFFLINE | Actual self-mute and in-flight POST boundary |
 | Talk-again dormant; new visit reset (H mode) | conversation/presence.mjs | `talk again restores dormant conversation...` — OFFLINE | Exact process-restart versus transport-reconnect behavior |
@@ -124,6 +125,7 @@ is a product decision, not a way to hide a missing current requirement.
 | Single-source temporary error recovery (H dependencies) | dependencies.mjs | JV-03 — FAIL baseline; candidate regressions pass | Invalid saved group state still to review |
 | Quiet by default, no absent brain polling (H cost/S) | event-watcher/index.mjs | `completed turns stay quiet by default...` — OFFLINE for notices | Full absent-state invocation counters |
 | One subscription path, no paid fallback (H Brain) | brain/intent-proposer.mjs | brain.test: `hung turn kills the stale app-server...` — OFFLINE | Audit all subprocess configuration/credential boundaries |
+| Bounded pending speech output (H performance/resources) | conversation.mjs `MAX_PENDING_TTS_BYTES` | `a stalled player drops the reply once 8 MB of speech is pending` (added Sept 29; passed on first run, coverage only) — OFFLINE | Real Discord player stall behavior and memory under long sessions |
 | Worker timeout/restart/idle resource release (H recovery/cost) | worker-client/index.mjs | worker-client.test: restart, suspend, queue bounds, timeout — OFFLINE | Long-run memory and concurrent load |
 | DAVE/decrypt/transport recovery (H performance) | voice.mjs | Prior warning only — UNTESTED | Reproduce warning/fault injection and authorized room check |
 | Total/component latency and feel (H performance/L) | conversation/worker/voice | `turn metrics are logged` only — UNTESTED performance | Measured distributions, concurrent load, 10–15-minute owner trial |
