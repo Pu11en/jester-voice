@@ -23,7 +23,7 @@ export class ActionJournal {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
       this.items = [];
-      await this.#save();
+      await this.#enqueue(() => this.#save([]));
     }
   }
 
@@ -32,31 +32,39 @@ export class ActionJournal {
   async prepare(kind, target, payload) {
     if (!["spoken", "spawn"].includes(kind) || !target || !payload) throw new Error("Invalid action");
     const key = createHash("sha256").update(JSON.stringify({ kind, target, payload })).digest("hex");
-    const existing = this.items.find(item => item.key === key && item.status !== "canceled" &&
-      (item.status === "pending" || this.now() - item.createdAt < 300_000));
-    if (existing) return { item: existing, fresh: false };
-    const item = { id: randomUUID(), key, kind, target, createdAt: this.now(), status: "pending" };
-    this.items.push(item);
-    await this.#save();
-    return { item, fresh: true };
+    return this.#enqueue(async () => {
+      const existing = this.items.find(item => item.key === key && item.status !== "canceled" &&
+        (item.status === "pending" || this.now() - item.createdAt < 300_000));
+      if (existing) return { item: existing, fresh: false };
+      const item = { id: randomUUID(), key, kind, target, createdAt: this.now(), status: "pending" };
+      const next = [...this.items, item];
+      await this.#save(next);
+      this.items = next;
+      return { item, fresh: true };
+    });
   }
 
   async finish(item, status, result = null) {
     if (!["posted", "failed", "created", "canceled"].includes(status)) throw new Error("Invalid action result");
-    const current = this.items.find(row => row.id === item.id);
-    if (!current) throw new Error("Unknown action identity");
-    current.status = status;
-    current.result = result;
-    await this.#save();
+    return this.#enqueue(async () => {
+      if (!this.items.some(row => row.id === item.id)) throw new Error("Unknown action identity");
+      const next = this.items.map(row => row.id === item.id ? { ...row, status, result } : row);
+      await this.#save(next);
+      this.items = next;
+    });
   }
 
-  async #save() {
-    this.saving = this.saving.then(async () => {
-      await mkdir(dirname(this.file), { recursive: true });
-      const temp = `${this.file}.${randomUUID()}.tmp`;
-      await writeFile(temp, JSON.stringify(this.items), { mode: 0o600 });
-      await rename(temp, this.file);
-    });
-    await this.saving;
+  #enqueue(operation) {
+    // Serialize decisions as well as writes. A failed operation still rejects
+    // its caller, but cannot expose unsaved state or poison every later attempt.
+    this.saving = this.saving.catch(() => {}).then(operation);
+    return this.saving;
+  }
+
+  async #save(items) {
+    await mkdir(dirname(this.file), { recursive: true });
+    const temp = `${this.file}.${randomUUID()}.tmp`;
+    await writeFile(temp, JSON.stringify(items), { mode: 0o600 });
+    await rename(temp, this.file);
   }
 }

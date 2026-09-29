@@ -19,6 +19,7 @@ The EBI OpenSpec change `stabilize-session-reliability` holds the combined plan.
 | JV-02 / P1 | Simulation leave constructed real Presence with default operational paths. Intercepted leave boundary in a regression (no real write) observed the live `presence.json` path. Running unpatched simulations can persist a fake dismissal into live service state. Historical impact not proven. | Give every simulation run/scenario temporary presence/privacy state; clean only its mkdtemp directory. New safe regression exercises the boundary. `sim/run.mjs`, `sim/run.test.mjs`. |
 | JV-03 / P1 | Single-source dependency accepted an invalid completion date and dispatched; invalid failure date blocked it; temporary/nonterminal failure also permanently blocked it. Three independent offline cases failed. | Require finite newer event/creation timestamps and terminal failure evidence, matching the grouped workflow's intended policy. Positive recovery and final-failure controls retained. `src/dependencies.mjs`, tests. |
 | JV-04 / P2 | Conversation.close returned with evidence writes still queued; tests logged ENOENT after temporary files were removed. A controlled blocked log queue proved close returned early. | Drain the owned log queue before returning from shutdown. Regression checks both waiting and persisted action identity. `src/conversation.mjs`, tests. |
+| JV-05 / P1 | Overlapping identical actions could reuse an in-memory journal row while its first save was pending. A failed save still let the spoken route POST with an ID that was never durable; failed `finish` exposed an unsaved `posted` state, and a rejected write poisoned every later save. Four temporary-file/fake-EBI regressions reproduce these cases. | Serialize duplicate decisions and disk writes. Publish new in-memory state only after atomic rename succeeds. Keep the caller's write failure visible while allowing later attempts to recover. `src/action-journal.mjs`, tests. |
 
 No live incident is attributed to these mechanisms without corresponding live evidence.
 All regressions use temporary state and fake service boundaries. The simulation RED
@@ -39,6 +40,10 @@ test intercepts leave specifically so proving the bug cannot mutate live state.
   (6.73s)**. `git diff --check` passed. Local fix commits: JV-01 `8185665`,
   JV-02 `ff252bb`, JV-03 `0892200`, JV-04 `7c5769a`. No push, main integration,
   service restart or live-state repair.
+- JV-05 was first RED: four regressions failed in the baseline. The focused
+  action-journal/router suite passed **23 tests** after the fix. The full Node suite
+  passed **143 tests**, the worker Python suite **7**, and the isolated simulator
+  reported **16/16**. `git diff --check` passed. These are offline checks only.
 - The shared pre-commit hook runs Lefthook, but this project has no Lefthook config;
   it reports that and exits successfully. The checks above were run explicitly.
 - No saved human `sim/results/review.json` was present in main at review time.
@@ -80,7 +85,7 @@ is a product decision, not a way to hide a missing current requirement.
 | Empty create invents no task (S/L) | owner-router/ebi-client.mjs | `an explicit empty session creates no invented first task` — OFFLINE | Current tag exhaustion/live receipt |
 | Stop/close/runtime exact target (H control) | owner-router.mjs | `stop sends no prompt...`, `runtime change and close...` — OFFLINE | EBI lifecycle/runtime continuity defects remain |
 | Truthful accepted/posted/unknown receipts (H brain/S) | owner-router/ebi-client.mjs | `lost spoken response...`, `missing EBI receipt...` — OFFLINE | Distinct action vs repeated phrase semantics |
-| Stable retry identity, no duplicate create (H recovery) | action-journal/owner-router.mjs | `uncertain action keeps its identity...`, `lost session creation...` — OFFLINE | Persistence failure and completed-action repeat policy |
+| Stable retry identity, no duplicate create (H recovery) | action-journal/owner-router.mjs | `uncertain action keeps its identity...`, `lost session creation...`, JV-05 disk failure/concurrency regressions — OFFLINE | Process-level multi-writer and fsync/power-loss assumptions; completed-action repeat policy |
 | Just-listen deterministic; cancels audio/actions (H mode) | conversation/dependencies.mjs | `just listen cancels current and queued speech...` — OFFLINE | Actual self-mute and in-flight POST boundary |
 | Talk-again dormant; new visit reset (H mode) | conversation/presence.mjs | `talk again restores dormant conversation...` — OFFLINE | Exact process-restart versus transport-reconnect behavior |
 | Pause captures nothing; guest pause/owner resume (H privacy/R) | presence/voice/conversation.mjs | `room member can pause...`, `recording pause discards buffered speech...` — OFFLINE | Actual Discord capture/audio boundary |
@@ -102,8 +107,10 @@ is a product decision, not a way to hide a missing current requirement.
 ## Next work
 
 Finish the three-commit adversarial review and missing per-requirement mappings.
-JV-04 covers queued turn-log writes at shutdown; further lifecycle producers still
-need review. Investigate result-report post/mark crash window, journal durability/repeated-command
-semantics, and lifecycle/routing races. Reproduce before repair; do not convert
-these review leads into confirmed bugs without tests. Run only the patched isolated
-simulator, not main's unpatched version. Keep live audio/performance checks separate.
+JV-04 covers queued turn-log writes at shutdown; JV-05 covers action-journal
+concurrency and storage failures. Further lifecycle producers still need review.
+Investigate the result-report post/mark crash window, journal process-level writer
+and fsync assumptions, and lifecycle/routing races. Reproduce before repair; do not
+convert review leads into confirmed bugs without tests. Run only the patched
+isolated simulator, not main's unpatched version. Keep live audio/performance checks
+separate.

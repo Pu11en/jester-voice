@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OwnerRouter } from "./owner-router.mjs";
@@ -102,6 +102,30 @@ test("a lost spoken response is reconciled after restart without a second send",
     assert.equal(calls.length, 1);
     await secondJournal.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("repeated speech sends no task while the action identity cannot be saved", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-route-save-failure-"));
+  const journal = new ActionJournal({ file: join(dir, "actions.json") });
+  try {
+    await journal.start();
+    await writeFile(join(dir, "blocked"), "not a directory");
+    journal.file = join(dir, "blocked", "actions.json");
+    const { client, calls } = setup();
+    client.spokenReceipt = async () => {
+      const error = new Error("no receipt");
+      error.status = 404;
+      throw error;
+    };
+    const router = new OwnerRouter({ client, ownerId, actionJournal: journal });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await router.handle("Tell Frankie to check login", { speakerId: ownerId }).catch(() => {});
+    }
+    assert.equal(calls.length, 0, "no EBI POST may precede a durable action identity");
+  } finally {
+    await journal.close().catch(() => {});
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("a missing EBI receipt retries only under its saved request ID", async () => {
