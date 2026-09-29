@@ -55,6 +55,12 @@ export class Presence extends EventEmitter {
     try {
       await this.voice.login();
       const ownerAlreadyPresent = this.#ownerChannelId() === this.config.voiceChannelId;
+      // A saved dismissal belongs to the previous room visit. If startup
+      // observes the owner absent, that visit ended while we were offline.
+      if (!ownerAlreadyPresent && this.dismissed) {
+        await this.#saveDismissed(false);
+        this.dismissed = false;
+      }
       this.restoredPresence = ownerAlreadyPresent && !this.dismissed;
       if (this.restoredPresence) this.emit("restoredPresence");
       await this.#setPresence(ownerAlreadyPresent);

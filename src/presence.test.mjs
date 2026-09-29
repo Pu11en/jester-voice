@@ -71,6 +71,26 @@ test("spoken leave remains dismissed after process restart until a new room visi
   restarted.presence.stop();
 });
 
+test("restart while owner is absent clears dismissal before the next visit", async () => {
+  const stateFile = join(tmpdir(), `jester-presence-${randomUUID()}.json`);
+  const first = setup({ channelId: "room", stateFile });
+  await first.presence.start();
+  await first.presence.leave();
+  first.presence.stop();
+  const restarted = setup({ channelId: null, stateFile });
+  try {
+    await restarted.presence.start();
+    assert.equal(restarted.calls.connect, 0);
+    assert.equal(restarted.presence.dismissed, false);
+    assert.equal(JSON.parse(await readFile(stateFile, "utf8")).dismissed, false);
+    restarted.client.emit("voiceStateUpdate", {}, {
+      id: "owner", guild: { id: "guild" }, channelId: "room",
+    });
+    await waitFor(() => restarted.calls.connect === 1);
+    assert.equal(restarted.presence.restoredPresence, false);
+  } finally { restarted.presence.stop(); }
+});
+
 test("room member can pause; only Drew resumes; paused state survives restart", async () => {
   const privacyFile = join(tmpdir(), `jester-privacy-${randomUUID()}.json`);
   const { client, calls, presence } = setup({ channelId: "room", privacyFile });
