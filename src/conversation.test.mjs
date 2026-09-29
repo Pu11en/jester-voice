@@ -69,6 +69,28 @@ async function withConversation(options, fn) {
   finally { await conversation.close(); await rm(dir, { recursive: true, force: true }); }
 }
 
+test("close drains queued route evidence before returning", async () => {
+  await withConversation({}, async ({ conversation, logPath }) => {
+    const gate = Promise.withResolvers();
+    conversation.logQueue = gate.promise;
+    conversation.traceRoute({ stage: "prepared", actionId: "offline-action" });
+    let closed = false;
+    const closing = conversation.close().then(() => { closed = true; });
+    try {
+      await tick();
+      assert.equal(closed, false, "shutdown must wait for queued evidence");
+      gate.resolve();
+      await closing;
+      const records = (await readFile(logPath, "utf8")).trim().split("\n").map(JSON.parse);
+      assert.equal(records.at(-1).actionId, "offline-action");
+    } finally {
+      gate.resolve();
+      await closing;
+      await conversation.logQueue;
+    }
+  });
+});
+
 test("speculative answer stays silent, is discarded on resumed speech, and merges into the next ask", async () => {
   await withConversation({ answers: ["Discard this.", "Use the merged thought."] }, async ({ events, brain, worker }) => {
     events("pause", { prob: 0.7, text: "Tell me about" });

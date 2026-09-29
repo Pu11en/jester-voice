@@ -153,6 +153,7 @@ export class Conversation {
     await this.#abortDraft();
     if (this.reply) this.#stopReply();
     this.#stopLocalClip();
+    await this.logQueue;
   }
 
   #event(event) {
