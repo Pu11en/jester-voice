@@ -55,8 +55,26 @@ test intercepts leave specifically so proving the bug cannot mutate live state.
 - The shared pre-commit hook runs Lefthook, but this project has no Lefthook config;
   it reports that and exits successfully. The checks above were run explicitly.
 - No saved human `sim/results/review.json` was present in main at review time.
-- Three functional commits `5653e5e`, `e53aa95`, `5f16221` are being reviewed;
-  the findings above do not constitute a completed review of all their code/tests.
+- The three functional commits `5653e5e`, `e53aa95`, `5f16221` now have a
+  behavior-level review with verdicts below; it is not a line-by-line proof.
+
+## Functional-commit review (September 29)
+
+Reviewed by behavior against current owner-V1 decisions; each confirmed defect
+was reproduced offline before its repair. Verdicts are for the candidate branch.
+
+| Commit | Verdict | Confirmed defects (repaired) | Remaining leads, not yet reproduced |
+| --- | --- | --- | --- |
+| `5653e5e` session answers, presence persistence, OOM restart | Accept with JV-01, JV-06 | JV-01 (restart-absent dismissal), JV-06 (failed dismissal write blocked leave/departure; double rejoin) | Unreadable `presence.json` aborts startup (fails closed like `privacy.json`; product choice). Session-read evidence relies on prompt instructions against injected thread text; no adversarial corpus. OOM `SystemExit(2)` restart path has no fault-injection test. |
+| `e53aa95` owner commands, intent proposer, action journal | Accept with JV-05, JV-07 | JV-05 (journal concurrency/storage), JV-07 (clipped proposal span; repeat reported as a new post) | Journal rows are never pruned (unbounded file growth). A `pending` row matches forever, so a crash-leftover identical request reconciles against the old ID. Proposer still cannot see constraints spoken before the extracted span. |
+| `5f16221` stale failure guards | Accept with JV-03 | JV-03 (single-source timestamps; same class as this commit's group guard) | Group completion without any turn timestamp falls back to "now"; saved group items without `createdAt` bypass the newer-than check. |
+
+EBI commits named in the handoff: `726ecaf` (explicit empty spawn) — accept; one
+confirmed defect repaired in the EBI candidate: `spawn_session(auto_start=True)`
+with no prompt created the Discord thread before rejecting it (orphan thread).
+`48f67d5` (single-thread spawn uses `VoiceTagger.tag_thread`) — accept; superseded
+and hardened by candidate commit `8406035`. Minor: the spawn response returns the
+thread's pre-tag name.
 
 ## Requirement-to-evidence inventory
 
