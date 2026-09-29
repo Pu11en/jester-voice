@@ -1,0 +1,109 @@
+# Jester stabilization checkpoint
+
+Owner approved continued local Jester + EBI review/repair in checked batches.
+This candidate is NOT deployed. Main baseline: `f804d995`; candidate branch:
+`fix/jester-stabilization-20260928`, worktree:
+`/home/drewp/.local/state/ccdb/session-wt/jester-stabilization-20260928`.
+Installed node_modules is reused by symlink; Python checks use the existing main
+`bench/.venv`. No packages/models installed, live writes or paid calls authorized.
+
+Full cross-repository briefing and next-session prompt:
+`/home/drewp/main-projects/ebi-agent-chat-relay/handoffs/2026-09-28-jester-ebi-stabilization.md`.
+The EBI OpenSpec change `stabilize-session-reliability` holds the combined plan.
+
+## Checked findings
+
+| ID / priority | Reproducer and impact | Candidate repair |
+| --- | --- | --- |
+| JV-01 / P1 | Leave -> stop process -> owner absent at restart -> next visit. Saved dismissal stayed true because initial absent state bypassed presence transition; Jester never joined the next visit. New test failed `true !== false`. | Clear and persist the ended visit's dismissal when startup observes the owner absent; keep same-visit dismissal and privacy pause intact. `src/presence.mjs`, `src/presence.test.mjs`. |
+| JV-02 / P1 | Simulation leave constructed real Presence with default operational paths. Intercepted leave boundary in a regression (no real write) observed the live `presence.json` path. Running unpatched simulations can persist a fake dismissal into live service state. Historical impact not proven. | Give every simulation run/scenario temporary presence/privacy state; clean only its mkdtemp directory. New safe regression exercises the boundary. `sim/run.mjs`, `sim/run.test.mjs`. |
+| JV-03 / P1 | Single-source dependency accepted an invalid completion date and dispatched; invalid failure date blocked it; temporary/nonterminal failure also permanently blocked it. Three independent offline cases failed. | Require finite newer event/creation timestamps and terminal failure evidence, matching the grouped workflow's intended policy. Positive recovery and final-failure controls retained. `src/dependencies.mjs`, tests. |
+| JV-04 / P2 | Conversation.close returned with evidence writes still queued; tests logged ENOENT after temporary files were removed. A controlled blocked log queue proved close returned early. | Drain the owned log queue before returning from shutdown. Regression checks both waiting and persisted action identity. `src/conversation.mjs`, tests. |
+
+No live incident is attributed to these mechanisms without corresponding live evidence.
+All regressions use temporary state and fake service boundaries. The simulation RED
+test intercepts leave specifically so proving the bug cannot mutate live state.
+
+## Verification record
+
+- Main baseline rerun: 133 Node tests passed; 7 Python worker tests passed (42.00s).
+  Node output included asynchronous turn-log ENOENT warnings after temp cleanup:
+  investigate ownership/draining; do not represent the warning gate as clean.
+- Presence + conversation focused checks passed after JV-01 (dot reporter).
+- Dependencies + watcher + simulation harness focused checks: 18 passed.
+- Candidate with JV-01/02/03: 138 Node tests, 7 Python tests (9.08s), and all
+  16 isolated simulation scenarios passed. After JV-04: **139 Node tests passed
+  in 6.12s**, with no turn-log ENOENT output. Expected injected outage messages
+  and Node's experimental MockTimers warning remain visible, not suppressed.
+- Final JV-04 rerun: **16/16 isolated simulations and 7 Python tests passed
+  (6.73s)**. `git diff --check` passed. Local fix commits: JV-01 `8185665`,
+  JV-02 `ff252bb`, JV-03 `0892200`, JV-04 `7c5769a`. No push, main integration,
+  service restart or live-state repair.
+- The shared pre-commit hook runs Lefthook, but this project has no Lefthook config;
+  it reports that and exits successfully. The checks above were run explicitly.
+- No saved human `sim/results/review.json` was present in main at review time.
+- Three functional commits `5653e5e`, `e53aa95`, `5f16221` are being reviewed;
+  the findings above do not constitute a completed review of all their code/tests.
+
+## Requirement-to-evidence inventory
+
+Product source: recent decisions and named sections of `HANDOFF.md` (H),
+`SCOPE-jester-owner-v1-before-trial.md` (S), `REPLACES_OLD_VOICE.md` (R), and
+`LIVE-CHECK-jester-owner.md` (L). Recent owner decisions override old guest/proactive
+sections. This is an initial inventory, not proof that the audit is exhaustive.
+
+OFFLINE means only the stated synthetic boundary has evidence; it never means
+actual room audio or a real EBI operation. UNTESTED identifies missing/insufficient
+evidence. FAIL refers to the baseline, even when a candidate fixes it. DEFERRED
+is a product decision, not a way to hide a missing current requirement.
+
+| Requirement / source | Implementation | Existing exact test anchor / evidence | Remaining gap |
+| --- | --- | --- | --- |
+| Owner arrival/departure (H Presence) | presence.mjs | presence.test: `joins and prewarms when owner arrives...` — OFFLINE | Actual Discord cache/event sequencing |
+| Intentional leave, no same-visit rejoin (H Presence) | presence.mjs | `spoken leave remains dismissed...` — OFFLINE | Disconnect failures and persistence write failure |
+| Restart absent then new visit (H Presence/recovery) | presence.mjs | JV-01 — FAIL baseline; candidate regression pass | Live activation |
+| Owner typed escape hatch (H Presence) | presence.mjs | `text escape hatch is restricted...` — OFFLINE | Live permissions |
+| Same-presence reconnect preserves transcript (H mode/R) | presence.mjs | `rejoins after voice transport failure...` — OFFLINE | Concurrent leave/join races |
+| Dormant speech: transcript, no brain/action (H attention) | attention/conversation.mjs | conversation.test: `dormant room speech and guest wake words...` — OFFLINE | Recognition false wakes in room |
+| Wake once, natural follow-ups (H attention/S) | attention.mjs | attention.test: `only a direct Jester address wakes...` — OFFLINE | Natural speech diversity/feel |
+| Side conversation/lull/end stops engagement (H attention) | attention/conversation.mjs | `ambient speech does not extend...`, `explicit side talk...` — OFFLINE | Acoustic/multi-person trial |
+| Engaged tag instructions; mentions do not act (H direct tags) | owner-intent/conversation.mjs | `named owner task routes...`, `finds read-only status requests...` — OFFLINE | Wider ambiguous phrasing corpus |
+| Finality, dropped audio and corrections (H spoken text) | conversation/owner-intent.mjs | `dropped owner audio...`, `final corrected task wins...` — OFFLINE | Real STT constraints/final corrections |
+| Faithful natural proposal (H spoken text) | intent-proposer/owner-router.mjs | `natural assignment becomes...`, `discussion, invented task text...` — OFFLINE | Constraints before extracted span; adversarial proposal review |
+| Exact speaker authority (H permissions) | conversation/owner-router.mjs | `reads current session facts and ignores another speaker` — OFFLINE | End-to-end Discord speaker attribution |
+| Ambiguous target asks, no guessed action (H authority) | owner-router/ebi-client.mjs | `unknown, duplicate, closed, and numeric IDs...` — OFFLINE | Whole-flow clarification correctness |
+| Names/Frankie resolve canonical string ID (H tags/L) | ebi-client.mjs | `resolves Frankie to the current exact string ID...` — OFFLINE | Live tag pool currently inconsistent in EBI |
+| Pronouns bind ID, not recyclable label (H tags) | owner-router.mjs | `posts one faithful task...binds follow-up`, `tag reassigned...` — OFFLINE | Rebind during journal/receipt awaits |
+| Current status/result grounded (H brain) | session-reader/owner-router.mjs | `reads the substantive result...`, `reports missing evidence...` — OFFLINE | Prompt-injection and clipping review |
+| Historical reference (H historical) | owner-router/ebi-client.mjs | `history lookup uses EBI search...` — OFFLINE | Natural time/topic disambiguation corpus |
+| Verified project + create first task (H creation) | owner-router/ebi-client.mjs | `creates a Codex session only in a verified project...` — OFFLINE | Cross-repo backend/model-before-first-turn proof |
+| Empty create invents no task (S/L) | owner-router/ebi-client.mjs | `an explicit empty session creates no invented first task` — OFFLINE | Current tag exhaustion/live receipt |
+| Stop/close/runtime exact target (H control) | owner-router.mjs | `stop sends no prompt...`, `runtime change and close...` — OFFLINE | EBI lifecycle/runtime continuity defects remain |
+| Truthful accepted/posted/unknown receipts (H brain/S) | owner-router/ebi-client.mjs | `lost spoken response...`, `missing EBI receipt...` — OFFLINE | Distinct action vs repeated phrase semantics |
+| Stable retry identity, no duplicate create (H recovery) | action-journal/owner-router.mjs | `uncertain action keeps its identity...`, `lost session creation...` — OFFLINE | Persistence failure and completed-action repeat policy |
+| Just-listen deterministic; cancels audio/actions (H mode) | conversation/dependencies.mjs | `just listen cancels current and queued speech...` — OFFLINE | Actual self-mute and in-flight POST boundary |
+| Talk-again dormant; new visit reset (H mode) | conversation/presence.mjs | `talk again restores dormant conversation...` — OFFLINE | Exact process-restart versus transport-reconnect behavior |
+| Pause captures nothing; guest pause/owner resume (H privacy/R) | presence/voice/conversation.mjs | `room member can pause...`, `recording pause discards buffered speech...` — OFFLINE | Actual Discord capture/audio boundary |
+| Stream first sentence before later composition (H speech) | conversation/brain.mjs | `accepted first sentence reaches Kokoro...` — OFFLINE | Real TTS first-audio timing |
+| Barge-in cancels queued speech and brain (H barge-in) | conversation/voice/brain.mjs | `barge-in stops audio...`, `discards sentences...` — OFFLINE | Measured interruption latency/noise robustness |
+| Context reflects actually heard speech (H barge-in) | conversation/voice.mjs | `records only estimated heard words`, `counts only time spent...` — OFFLINE | Estimate vs actual audio and disconnected playback |
+| All speakers + one editable transcript attachment (H/R) | transcript/conversation.mjs | `writes all speakers...`, `posts one edited Auto Transcripts attachment...` — OFFLINE | Real allwork ingestion and interrupted end marker |
+| Retention confined to transcript files (R) | transcript.mjs | `prunes only old transcript files inside its directory` — OFFLINE | Inspect retention clock and failure handling |
+| Requested once-only fixed-ID watches (H dependencies/S) | dependencies/event-watcher.mjs | `named result group tracks every exact ID...`, `three-session result watch...` — OFFLINE | Post/mark crash window and no-repeat recovery |
+| Single-source temporary error recovery (H dependencies) | dependencies.mjs | JV-03 — FAIL baseline; candidate regressions pass | Invalid saved group state still to review |
+| Quiet by default, no absent brain polling (H cost/S) | event-watcher/index.mjs | `completed turns stay quiet by default...` — OFFLINE for notices | Full absent-state invocation counters |
+| One subscription path, no paid fallback (H Brain) | brain/intent-proposer.mjs | brain.test: `hung turn kills the stale app-server...` — OFFLINE | Audit all subprocess configuration/credential boundaries |
+| Worker timeout/restart/idle resource release (H recovery/cost) | worker-client/index.mjs | worker-client.test: restart, suspend, queue bounds, timeout — OFFLINE | Long-run memory and concurrent load |
+| DAVE/decrypt/transport recovery (H performance) | voice.mjs | Prior warning only — UNTESTED | Reproduce warning/fault injection and authorized room check |
+| Total/component latency and feel (H performance/L) | conversation/worker/voice | `turn metrics are logged` only — UNTESTED performance | Measured distributions, concurrent load, 10–15-minute owner trial |
+| Simulation cannot change production (verification contract) | sim/run.mjs | JV-02 — FAIL baseline; candidate boundary test passes | Complete filesystem/network boundary audit |
+| Guest conversation/control/grants (H latest scope) | deliberately out of V1 | DEFERRED | Guest transcript/privacy above remains required |
+
+## Next work
+
+Finish the three-commit adversarial review and missing per-requirement mappings.
+JV-04 covers queued turn-log writes at shutdown; further lifecycle producers still
+need review. Investigate result-report post/mark crash window, journal durability/repeated-command
+semantics, and lifecycle/routing races. Reproduce before repair; do not convert
+these review leads into confirmed bugs without tests. Run only the patched isolated
+simulator, not main's unpatched version. Keep live audio/performance checks separate.
