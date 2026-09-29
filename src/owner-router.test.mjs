@@ -335,3 +335,23 @@ test("a repeated identical task says it was not sent again", async () => {
     await actionJournal.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("a remote or unverified project never gets a local stand-in session", async () => {
+  const { router, client, calls } = setup();
+  for (const kind of ["remote_only", "unavailable", "ambiguous"]) {
+    client.resolveProject = async name => ({ kind, locally_verified: false, path: `/elsewhere/${name}`, name });
+    const reply = await router.handle("Start a session in jester-voice to check tests", { speakerId: ownerId });
+    assert.match(reply, /couldn't find one available local project/);
+  }
+  assert.equal(calls.filter(call => call[0] === "spawn").length, 0);
+});
+
+test("an on-demand update names each running session with its state and task", async () => {
+  const { router, setRows } = setup();
+  setRows([franky, zoro, { ...zoro, threadId: "1554149594718281869", tag: "nami", state: "queued",
+    currentTask: "" }]);
+  const reply = await router.handle("Update me on my sessions", { speakerId: ownerId });
+  assert.match(reply, /franky \(running\): Checking login/);
+  assert.match(reply, /nami \(queued\): task unavailable/);
+  assert.doesNotMatch(reply, /zoro/, "history sessions are not reported as work in progress");
+});

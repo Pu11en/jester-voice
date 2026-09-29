@@ -91,7 +91,9 @@ thread's pre-tag name.
 Product source: recent decisions and named sections of `HANDOFF.md` (H),
 `SCOPE-jester-owner-v1-before-trial.md` (S), `REPLACES_OLD_VOICE.md` (R), and
 `LIVE-CHECK-jester-owner.md` (L). Recent owner decisions override old guest/proactive
-sections. This is an initial inventory, not proof that the audit is exhaustive.
+sections. Cross-checked on September 29 against every row of `SCOPE-jester-owner-v1-before-trial.md`
+("Owner V1 inventory" and "Behavior decisions"); rows added for each scope item that
+had no mapping. GAP rows are real missing behavior or evidence, not hidden passes.
 
 OFFLINE means only the stated synthetic boundary has evidence; it never means
 actual room audio or a real EBI operation. UNTESTED identifies missing/insufficient
@@ -140,6 +142,19 @@ is a product decision, not a way to hide a missing current requirement.
 | DAVE/decrypt/transport recovery (H performance) | voice.mjs | Prior warning only — UNTESTED | Reproduce warning/fault injection and authorized room check |
 | Total/component latency and feel (H performance/L) | conversation/worker/voice | `turn metrics are logged` only — UNTESTED performance | Measured distributions, concurrent load, 10–15-minute owner trial |
 | Simulation cannot change production (verification contract) | sim/run.mjs | JV-02 — FAIL baseline; candidate boundary test passes | Complete filesystem/network boundary audit |
+| Reliable hearing: bounded STT memory and automatic recovery (S "Hear and transcribe") | worker/speech.py, worker-client.mjs | worker-client: `worker process restarts after a crash and never replays queued input`, `worker bounds buffered audio...`; speech.py exits on the ONNX "Available memory" error so the client restarts it — OFFLINE (restart path) | OOM exit itself has no fault-injection test; long two-speaker soak on the real GPU is inherited evidence only |
+| Surface lost audio instead of acting on it (S) | conversation.mjs | `dropped owner audio makes an otherwise valid task unsafe` — OFFLINE | Real packet-loss conditions |
+| Overlapping voices: Drew prioritized (S) | — | No implementation or test found for overlap priority | GAP |
+| Wait for the old Luna turn before the next request (S "Speak, stream and interrupt") | conversation/brain.mjs | `speech starting immediately after turn_end prevents its pending cue and brain request`, `an interrupted request cannot suppress or trigger a replacement turn's cue` — OFFLINE | Live brain-overlap reproduction |
+| Multi-turn draft; latest correction wins (S "Hold a multi-turn draft") | create-draft/conversation.mjs | `final direct address and corrected destination yield one task draft`, `a resumed draft cannot hide an ending...`; sims `jobs-draft`, `recorded-jobs`, `abandoned-create`, `abandoned-create-chat` — OFFLINE | Longer pauses across real STT |
+| Optional readback/revision on request (S) | — | No readback command found | GAP (owner decision whether V1 needs it) |
+| Remote/unavailable project is never replaced by a local folder (S "Create a session") | owner-router.mjs | `a remote or unverified project never gets a local stand-in session` (added Sept 29, passed first run) — OFFLINE | Wording says "available local project" rather than naming the remote state |
+| On-demand update of running work (S "On-demand updates") | owner-router.mjs | `an on-demand update names each running session with its state and task` (added Sept 29, passed first run); intent: `finds read-only status requests...` — OFFLINE | Blockers and the labeled longer Auto Transcripts list are not implemented (GAP) |
+| Delivery vs completion wording (S) | owner-router/ebi-client.mjs | receipts rows above; `explicit empty spawn sends no prompt and does not start a worker` — OFFLINE | Whether a created session "started" its first turn is not verified from turn state (GAP) |
+| Private bounded action trace (S "Diagnose a bad turn") | owner-router `trace` → conversation `traceRoute` | `close drains queued route evidence before returning` — OFFLINE | No test asserts the full transcript→intent→target→action→receipt chain for one turn |
+| Contextual "both" (S coordination) | owner-intent/owner-router.mjs | sim `ambiguous-both` — OFFLINE | Real conversational context |
+| Replays of the trial failures (S build order 1) | sim/scenarios.mjs | 16 isolated scenarios incl. `natural-zoro`, `yo-zoro`, `discuss-zoro`, `recorded-jobs`, `correct-target`, `ambiguous-both`, `quiet-modes`, `dismiss-side-talk` — OFFLINE | Scenarios are text replays, not audio |
+| Crash-orphaned transcript gets an interrupted/ended marker (S "Survive crash") | transcript.mjs | `posts one edited Auto Transcripts attachment...` (ended edit on finish) — OFFLINE | Marker after an unclean process crash is untested (GAP) |
 | Guest conversation/control/grants (H latest scope) | deliberately out of V1 | DEFERRED | Guest transcript/privacy above remains required |
 
 ## Next work
