@@ -124,7 +124,10 @@ test("room member can pause; only Drew resumes; paused state survives restart", 
       isButton: () => true, customId: "jester:recording:resume", guildId: "guild", channelId: "text",
       user: { id: "owner" }, reply: async (payload) => replies.push(payload.content),
     });
-    await new Promise(resolve => setTimeout(resolve, 15));
+    const savedPaused = async () => JSON.parse(await readFile(privacyFile, "utf8")).paused;
+    for (let i = 0; i < 100 && (restarted.presence.paused || await savedPaused()); i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
     assert.equal(restarted.presence.paused, false);
     assert.equal(JSON.parse(await readFile(privacyFile, "utf8")).paused, false);
     restarted.presence.stop();
