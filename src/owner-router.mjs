@@ -14,15 +14,15 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const isOpen = row => row.closed !== true;
 const folder = project => String(project || "").split("/").filter(Boolean).at(-1) || "";
-const displayName = row => String(row.name || "").trim() || folder(row.project);
+/** A Discord thread name for speech: no leading "[tag] " and no leading emoji like "📂 ". */
+const threadSpoken = name => String(name || "").replace(/^\s*\[[^\]]*\]\s*/u, "")
+  .replace(/^[^\p{L}\p{N}]+/u, "").trim();
+const displayName = row => threadSpoken(row.name) || folder(row.project);
 const spokenState = state => (!state || state === "history") ? "idle" : String(state);
 const compact = value => String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 const tagPhrase = (row, capital = false) => row.tag ? `${capital ? "Tag" : "tag"} ${row.tag}` : `${capital ? "No" : "no"} tag`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const OTHER_MAX = 6;
-/** A Discord thread name for speech: no leading "[tag] " and no leading emoji like "📂 ". */
-const threadSpoken = name => String(name || "").replace(/^\s*\[[^\]]*\]\s*/u, "")
-  .replace(/^[^\p{L}\p{N}]+/u, "").trim();
 const runner = thread => thread.ownerName || "someone else";
 const andJoin = items => items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 const foreignRows = threads => threads.map(thread => ({ tag: "", aliases: [], name: threadSpoken(thread.name),

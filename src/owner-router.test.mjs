@@ -388,6 +388,15 @@ test("lists every open session by name with its tag and state, without any brain
     /^2 open sessions: podlox \(tag zoro, recovering\); Task loop \(no tag, idle\)\. 1 of them isn't visible in Discord\.$/);
 });
 
+test("session names are spoken without their title tag or emoji", async () => {
+  const { router, setRows } = snapshotOnly();
+  setRows([{ ...podlox, name: "[zoro] 📂 podlox" }]);
+  assert.equal(await router.handle("What's open?", { speakerId: ownerId }),
+    "1 open session: podlox (tag zoro, recovering).");
+  assert.equal(await router.handle("Do you see podlox?", { speakerId: ownerId }),
+    "Yes, podlox is open. Tag zoro, recovering.");
+});
+
 test("see-one answers yes or no from open rows with a clear fuzzy match", async () => {
   const { router, calls, setRows } = snapshotOnly();
   setRows([podlox, taskLoop, oldAudit]);
