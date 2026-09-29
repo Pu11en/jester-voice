@@ -2,6 +2,12 @@
 
 Run `node sim/run.mjs` from the Jester project. It feeds scripted owner/guest turns through the real `Conversation`, `OwnerRouter`, `Presence`, and intent parser with fake Discord, Luna, and EBI. It checks speech, silence, target IDs, exact fake EBI writes, mode changes, and no-action boundaries. The JSON evidence is in `sim/results/latest.json`; it contains no live project content or credentials. The simulator does not call a model, spend API money, start a worker, enter Discord, or post to EBI.
 
+Each run/scenario uses isolated temporary presence and recording-privacy files,
+removed when the run ends. Never use the live service's operational state as a
+simulation fixture. Reports remain under `sim/results/`; human review marks are
+not overwritten. The harness isolation test intercepts leave before any write,
+so even a regression cannot change live presence state while the test runs.
+
 Open `http://localhost:8798/`. The `jester-review.service` user service keeps this localhost page available across chat sessions and restarts; its source unit is `deploy/jester-review.service`. Check it with `systemctl --user status jester-review.service`. The page copies the case-by-case human review pattern from Drew's Eval: it shows what Jester heard, said, and sent, plus an automatic grade. Drew can mark **Looks right**, **Needs change**, or **Unsure** and add a note. Marks persist in `sim/results/review.json` through page reloads and simulation reruns. Read and incorporate that feedback before any live Discord test.
 
 The scenarios are in `sim/scenarios.mjs`. Add a real trial phrase there before fixing its behavior. Passing text simulation does not prove speech recognition, audio latency, Discord muting, a real EBI receipt, or natural phrasing outside these scripts. Those need separate offline audio checks and then a supervised disposable live session.

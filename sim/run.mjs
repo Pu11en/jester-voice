@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Conversation } from "../src/conversation.mjs";
 import { OwnerRouter } from "../src/owner-router.mjs";
@@ -60,7 +61,7 @@ function fixture(scenarioId) {
   return { client, writes, watches, groups };
 }
 
-function makeParts(fixtureState, scenarioId) {
+function makeParts(fixtureState, scenarioId, stateDirectory) {
   const worker = new EventEmitter();
   worker.sent = [];
   worker.send = message => {
@@ -107,6 +108,8 @@ function makeParts(fixtureState, scenarioId) {
   } : null;
   const presence = new Presence({ client: new EventEmitter(), voice, brain, transcript,
     config: { ownerId, guildId: "guild", voiceChannelId: "room", transcriptChannelId: "transcript" },
+    stateFile: join(stateDirectory, "presence.json"),
+    privacyFile: join(stateDirectory, "privacy.json"),
     logger: { warn() {} } });
   const conversation = new Conversation({ worker, brain, voice, ownerId, presence, transcript,
     ownerRouter, intentProposer,
@@ -146,9 +149,9 @@ export function grade(expect, actual) {
   return failures;
 }
 
-async function runScenario(scenario) {
+async function runScenario(scenario, stateDirectory) {
   const fixtureState = fixture(scenario.id);
-  const parts = makeParts(fixtureState, scenario.id);
+  const parts = makeParts(fixtureState, scenario.id, stateDirectory);
   const { worker, brain, voice, conversation } = parts;
   conversation.start();
   const steps = [];
@@ -182,9 +185,16 @@ async function runScenario(scenario) {
     passed: steps.every(step => !step.failures.length) };
 }
 
-export async function runAll() {
+export async function runAll({ cases = scenarios } = {}) {
   const results = [];
-  for (const scenario of scenarios) results.push(await runScenario(scenario));
+  // Fake Discord does not make real filesystem defaults safe. Keep operational
+  // state temporary and separate for every run and scenario; retain only reports.
+  const stateDirectory = await mkdtemp(join(tmpdir(), "jester-sim-"));
+  try {
+    for (const [index, scenario] of cases.entries()) {
+      results.push(await runScenario(scenario, join(stateDirectory, String(index))));
+    }
+  } finally { await rm(stateDirectory, { recursive: true, force: true }); }
   return { generated_at: new Date().toISOString(), engine: "Conversation + OwnerRouter; fake Discord, Luna, EBI",
     results, passed: results.filter(result => result.passed).length,
     total: results.length };
