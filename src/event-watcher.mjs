@@ -20,6 +20,8 @@ export class EventWatcher {
     this.intervalMs = intervalMs;
     this.dependencies = dependencies;
     this.postResults = postResults;
+    // Watches whose attachment reached Discord in this process (at-least-once across a crash).
+    this.postedReports = new Set();
     this.state = null;
     this.timer = null;
     this.running = false;
@@ -160,15 +162,20 @@ export class EventWatcher {
         this.conversation.turn || this.conversation.reply || !this.presence.inPresence ||
         !this.presence.joined || this.presence.paused) return;
     if (!watch.reportPosted && !watch.reportUnavailable) {
-      try {
-        if (!this.postResults) throw new Error("Auto Transcripts result posting is unavailable");
-        await this.postResults(report.markdown, watch.id);
-        if (!(await this.dependencies.markReportPosted(watch.id, report.spoken))) return;
-      } catch (error) {
-        if (this.now() - watch.readyAt < 30_000) throw error;
-        this.logger.warn?.("[events] result post unavailable:", error.message);
-        if (!(await this.dependencies.markReportUnavailable(watch.id))) return;
+      if (!this.postedReports.has(watch.id)) {
+        try {
+          if (!this.postResults) throw new Error("Auto Transcripts result posting is unavailable");
+          await this.postResults(report.markdown, watch.id);
+        } catch (error) {
+          if (this.now() - watch.readyAt < 30_000) throw error;
+          this.logger.warn?.("[events] result post unavailable:", error.message);
+          if (!(await this.dependencies.markReportUnavailable(watch.id))) return;
+        }
+        // Discord has it now. A failed save below must retry the save, not the post.
+        if (!watch.reportUnavailable) this.postedReports.add(watch.id);
       }
+      if (this.postedReports.has(watch.id) &&
+          !(await this.dependencies.markReportPosted(watch.id, report?.spoken))) return;
     }
     if (this.conversation.announce(watch.reportSpoken || report?.spoken ||
         "I posted the watched session results in Auto Transcripts.")) {

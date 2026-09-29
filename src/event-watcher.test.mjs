@@ -199,3 +199,37 @@ test("an unavailable result channel eventually tells Drew instead of waiting for
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("a posted result is not posted again when saving that fact fails", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-events-"));
+  let now = Date.parse("2026-09-28T12:00:00Z");
+  const posts = [];
+  const client = { turnUpdates: async () => empty(), threadMessages: async () => [
+    { is_bot: true, content: "- Try the local page", created_at: "2026-09-28T12:00:03Z" },
+  ] };
+  const deps = new Dependencies({ client, ownerId: "488763953397235712",
+    file: join(dir, "dependencies.json"), now: () => now, logger: { warn() {} } });
+  const watcher = new EventWatcher({ client, dependencies: deps,
+    conversation: { mode: "conversation", turn: null, reply: null, announce: () => true },
+    presence: { inPresence: true, joined: true, paused: false },
+    postResults: async (...args) => posts.push(args),
+    file: join(dir, "events.json"), now: () => now, intervalMs: 60_000,
+    logger: { warn() {} } });
+  try {
+    await deps.start();
+    await deps.addResultWatch({ sources: [{ threadId, label: "franky" }] });
+    await deps.accepted(threadId, { accepted_at: "2026-09-28T12:00:02Z" });
+    await watcher.start();
+    await tickWait();
+    deps.markReportPosted = async () => { throw new Error("disk full"); };
+    for (const step of [3_000, 5_000, 30_000, 5_000]) {
+      now += step;
+      await watcher.tick().catch(() => {});
+    }
+    assert.equal(posts.length, 1, "Discord already has the attachment; do not repeat it");
+  } finally {
+    await watcher.close();
+    await deps.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
