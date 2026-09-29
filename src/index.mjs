@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { AttachmentBuilder } from "discord.js";
 import { Brain } from "./brain.mjs";
+import { ClaudeBrain } from "./claude-brain.mjs";
+import { FallbackBrain } from "./brain-fallback.mjs";
 import { loadConfig } from "./config.mjs";
 import { Conversation } from "./conversation.mjs";
 import { Presence } from "./presence.mjs";
@@ -19,9 +21,22 @@ import { childEnv } from "./child-env.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** Codex first; Claude answers while Codex is out, unless JESTER_BRAIN_FALLBACK=none. */
+export function buildBrain(config = {}, { logger = console } = {}) {
+  const codex = new Brain({});
+  if (config.brainFallback === "none") return codex;
+  return new FallbackBrain({
+    primary: codex,
+    secondary: new ClaudeBrain({ command: config.claudeBin || "claude",
+      ...(config.claudeModel ? { model: config.claudeModel } : {}) }),
+    retryAfterMs: (config.brainRetryMinutes || 10) * 60_000,
+    logger,
+  });
+}
+
 export async function startApp({ config, createVoiceImpl = createVoice,
   createWorkerImpl = (options) => new WorkerClient(options),
-  createBrainImpl = (options) => new Brain(options),
+  createBrainImpl = ({ config }) => buildBrain(config),
   createTranscriptImpl = (options) => new RoomTranscript(options),
   createPresenceImpl = (options) => new Presence(options),
   createConversationImpl = (options) => new Conversation(options),
@@ -32,7 +47,6 @@ export async function startApp({ config, createVoiceImpl = createVoice,
 } = {}) {
   config ||= await loadConfig();
   const stallClip = await readFile(resolve(projectRoot, "assets/thinking.pcm"));
-  const unavailableClip = await readFile(resolve(projectRoot, "assets/unavailable.pcm"));
   const worker = createWorkerImpl({
     command: config.python,
     args: [resolve(projectRoot, "worker/speech.py")],
@@ -42,7 +56,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const voice = createVoiceImpl({ config, onAudio: (speaker, pcm) => {
     worker.send({ op: "audio", speaker, pcm: pcm.toString("base64") });
   } });
-  const brain = createBrainImpl({});
+  const brain = createBrainImpl({ config });
   const ebiClient = new EbiClient({ baseUrl: config.ebiApiUrl, secret: config.ebiApiSecret });
   const dependencies = createDependenciesImpl({ client: ebiClient, ownerId: config.ownerId });
   const actionJournal = createActionJournalImpl();
@@ -62,8 +76,15 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const transcript = createTranscriptImpl({ client: voice.client, channelId: config.transcriptChannelId });
   const presence = createPresenceImpl({ client: voice.client, voice, brain, config, transcript });
   const conversation = createConversationImpl({ worker, brain, voice, ownerId: config.ownerId,
-    presence, transcript, stallClip, unavailableClip, ownerRouter, intentProposer });
+    presence, transcript, stallClip, ownerRouter, intentProposer });
   ownerRouter.trace = entry => conversation.traceRoute?.(entry);
+  // Same turns.jsonl writer as every other row.
+  const onBrainSwitched = ({ from, to, reason }) => {
+    const row = { type: "brainSwitched", from, to, reason };
+    if (conversation.logEvent) conversation.logEvent(row);
+    else conversation.traceRoute?.(row);
+  };
+  brain.on?.("brainSwitched", onBrainSwitched);
   const eventWatcher = createEventWatcherImpl({ client: ebiClient, conversation, presence,
     dependencies,
     postResults: async (markdown, id) => {
@@ -113,6 +134,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
         const errors = [];
         clearTimeout(idleTimer);
         presence.off?.("reset", onPresenceReset);
+        brain.off?.("brainSwitched", onBrainSwitched);
         for (const close of [
           () => eventWatcher.close(),
           () => dependencies.close(),

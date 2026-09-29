@@ -55,3 +55,24 @@ test("prefers Jester channel IDs and falls back to the old voice env file", asyn
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("brain fallback settings default to Claude Haiku with a ten-minute Codex retry", () => {
+  const config = readConfig(valid);
+  assert.equal(config.brainFallback, "claude");
+  assert.equal(config.claudeBin, "claude");
+  assert.equal(config.claudeModel, "claude-haiku-4-5-20251001");
+  assert.equal(config.brainRetryMinutes, 10);
+});
+
+test("brain fallback settings read overrides and reject bad retry minutes", () => {
+  const config = readConfig({ ...valid, JESTER_BRAIN_FALLBACK: "None", JESTER_CLAUDE_BIN: "/opt/claude",
+    CLAUDE_BIN: "/other/claude", JESTER_CLAUDE_MODEL: "claude-sonnet-test", JESTER_BRAIN_RETRY_MINUTES: "2.5" });
+  assert.equal(config.brainFallback, "none");
+  assert.equal(config.claudeBin, "/opt/claude");
+  assert.equal(config.claudeModel, "claude-sonnet-test");
+  assert.equal(config.brainRetryMinutes, 2.5);
+  assert.equal(readConfig({ ...valid, CLAUDE_BIN: "/other/claude" }).claudeBin, "/other/claude");
+  for (const bad of ["", "0", "-3", "soon", "Infinity"]) {
+    assert.equal(readConfig({ ...valid, JESTER_BRAIN_RETRY_MINUTES: bad }).brainRetryMinutes, 10, bad);
+  }
+});

@@ -27,6 +27,12 @@ async function readEnvFile(path) {
   }
 }
 
+/** Minutes between Codex retries while Claude answers; bad values fall back to 10. */
+function retryMinutes(value) {
+  const minutes = Number(value);
+  return value && Number.isFinite(minutes) && minutes > 0 ? minutes : 10;
+}
+
 export function readConfig(env) {
   const id = (key) => {
     if (!/^\d{17,20}$/.test(env[key] || "")) {
@@ -46,6 +52,10 @@ export function readConfig(env) {
     modelsDir: env.JESTER_MODELS_DIR || "/home/drewp/main-projects/jester-voice/bench/data/models",
     ebiApiUrl: env.JESTER_EBI_API_URL || "http://127.0.0.1:9876",
     ebiApiSecret: env.JESTER_EBI_API_SECRET || env.CCDB_API_SECRET || "",
+    brainFallback: (env.JESTER_BRAIN_FALLBACK || "claude").trim().toLowerCase(),
+    claudeBin: env.JESTER_CLAUDE_BIN || env.CLAUDE_BIN || "claude",
+    claudeModel: env.JESTER_CLAUDE_MODEL || "claude-haiku-4-5-20251001",
+    brainRetryMinutes: retryMinutes(env.JESTER_BRAIN_RETRY_MINUTES),
   };
   if (config.voiceChannelId === config.transcriptChannelId) {
     throw new Error("Voice and transcript channels must be different");

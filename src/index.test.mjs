@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { startApp } from "./index.mjs";
+import { buildBrain, startApp } from "./index.mjs";
+import { Brain } from "./brain.mjs";
+import { ClaudeBrain } from "./claude-brain.mjs";
+import { FallbackBrain } from "./brain-fallback.mjs";
 
 test("application starts the worker and presence, wires audio, then shuts down cleanly", async () => {
   const calls = [];
@@ -49,4 +52,62 @@ test("startup failure closes constructed services", async () => {
   });
   await assert.rejects(app.start(), /fake offline login/);
   assert.deepEqual(calls, ["presence", "brain", "worker", "voice"]);
+});
+
+test("buildBrain chains Codex then Claude by default and a plain Codex brain when disabled", async () => {
+  const config = { brainFallback: "claude", claudeBin: "/fake/claude", claudeModel: "claude-test",
+    brainRetryMinutes: 3 };
+  const chained = buildBrain(config, { logger: {} });
+  assert.ok(chained instanceof FallbackBrain);
+  assert.ok(chained.primary instanceof Brain);
+  assert.ok(chained.secondary instanceof ClaudeBrain);
+  assert.equal(chained.secondary.command, "/fake/claude");
+  assert.equal(chained.secondary.model, "claude-test");
+  assert.equal(chained.retryAfterMs, 3 * 60_000);
+  assert.deepEqual(chained.names, { primary: "codex", secondary: "claude" });
+  assert.equal(buildBrain({}).retryAfterMs, 10 * 60_000, "defaults without config values");
+  const plain = buildBrain({ ...config, brainFallback: "none" });
+  assert.ok(plain instanceof Brain);
+  await Promise.all([chained.close(), plain.close()]);
+});
+
+test("a brainSwitched event is written as one row to the turn log", async () => {
+  const rows = [];
+  const brain = Object.assign(new EventEmitter(), { async close() {} });
+  const app = await startApp({ config: { python: "python", modelsDir: "models", ownerId: "owner" },
+    createWorkerImpl: () => ({ async start() {}, async close() {}, send() {} }),
+    createVoiceImpl: () => ({ client: {}, async destroy() {} }),
+    createBrainImpl: () => brain,
+    createTranscriptImpl: () => ({}),
+    createPresenceImpl: () => ({ async start() {}, stop() {} }),
+    createConversationImpl: () => ({ start() {}, async close() {}, logEvent: row => rows.push(row) }),
+    createEventWatcherImpl: () => ({ async start() {}, async close() {} }),
+    createDependenciesImpl: () => ({ async start() {}, async close() {} }),
+    createActionJournalImpl: () => ({ async start() {}, async close() {} }),
+    createIntentProposerImpl: () => ({ async close() {} }),
+  });
+  brain.emit("brainSwitched", { from: "codex", to: "claude", reason: "usageLimitExceeded" });
+  assert.deepEqual(rows, [{ type: "brainSwitched", from: "codex", to: "claude", reason: "usageLimitExceeded" }]);
+  await app.close();
+  brain.emit("brainSwitched", { from: "claude", to: "codex", reason: "recovered" });
+  assert.equal(rows.length, 1, "no rows after close");
+});
+
+test("without a public logEvent the row goes through traceRoute with its own type", async () => {
+  const rows = [];
+  const brain = Object.assign(new EventEmitter(), { async close() {} });
+  await startApp({ config: { python: "python", modelsDir: "models", ownerId: "owner" },
+    createWorkerImpl: () => ({ async start() {}, async close() {}, send() {} }),
+    createVoiceImpl: () => ({ client: {}, async destroy() {} }),
+    createBrainImpl: () => brain,
+    createTranscriptImpl: () => ({}),
+    createPresenceImpl: () => ({ async start() {}, stop() {} }),
+    createConversationImpl: () => ({ start() {}, async close() {}, traceRoute: row => rows.push(row) }),
+    createEventWatcherImpl: () => ({ async start() {}, async close() {} }),
+    createDependenciesImpl: () => ({ async start() {}, async close() {} }),
+    createActionJournalImpl: () => ({ async start() {}, async close() {} }),
+    createIntentProposerImpl: () => ({ async close() {} }),
+  });
+  brain.emit("brainSwitched", { from: "codex", to: "claude", reason: "unreachable" });
+  assert.deepEqual(rows, [{ type: "brainSwitched", from: "codex", to: "claude", reason: "unreachable" }]);
 });
