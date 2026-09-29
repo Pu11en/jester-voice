@@ -12,24 +12,35 @@ import ctypes
 import glob
 import json
 import os
+import select
 import site
 import sys
 import threading
 import time
 import re
+import wave
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Protocol
 
 import numpy as np
 
 SAMPLE_RATE = 16_000
 FRAME_SAMPLES = 512  # Silero v5's 32 ms frame at 16 kHz.
 FRAME_BYTES = FRAME_SAMPLES * 2
+FRAME_MS = FRAME_SAMPLES * 1000 / SAMPLE_RATE
 MAX_UTTERANCE_FRAMES = 60 * SAMPLE_RATE // FRAME_SAMPLES
 VAD_START_THRESHOLD = 0.5
 VAD_CONTINUE_THRESHOLD = 0.35
+# speech_start needs this many consecutive voiced frames (~288 ms), so clicks,
+# breaths and short coughs never start a turn. The frames are buffered meanwhile.
+SPEECH_START_FRAMES = 9
+# A pending burst is dropped once this many silent frames (~192 ms) follow it.
+SPEECH_START_GAP_FRAMES = 6
+# speech_sustained is emitted once an utterance holds this much voiced audio.
+SUSTAINED_MS = 1_000
 PAUSE_MS = 200
+INPUT_POLL_MS = 100  # Idle stdin poll, so silence fallbacks run without new audio.
 TURN_THRESHOLD = 0.5
 NORMAL_TIMEOUT_MS = 1_800
 CONNECTOR_TIMEOUT_MS = 7_000
@@ -42,6 +53,12 @@ def _models_dir() -> Path:
     return Path(os.environ.get(
         "JESTER_MODELS_DIR", "/home/drewp/main-projects/jester-voice/bench/data/models"
     ))
+
+
+def debug_clips_dir() -> Path | None:
+    """Opt-in folder for finished utterances as 16 kHz wav files (JESTER_DEBUG_CLIPS_DIR)."""
+    value = os.environ.get("JESTER_DEBUG_CLIPS_DIR", "").strip()
+    return Path(value) if value else None
 
 
 def add_nvidia_libs() -> None:
@@ -140,9 +157,25 @@ class ParakeetSTT:
                 "arena_extend_strategy": "kSameAsRequested",
             })],
         )
+        # The same decoder, asked to keep per-token log-probabilities.
+        self.scored_model = self.model.with_timestamps()
+        self.scored_failed = False
 
     def transcribe(self, audio: np.ndarray) -> str:
         return str(self.model.recognize(audio, sample_rate=SAMPLE_RATE)).strip()
+
+    def transcribe_scored(self, audio: np.ndarray) -> tuple[str, float | None]:
+        """Transcribe and return the mean token log-probability, or None without tokens."""
+        if not self.scored_failed:
+            try:
+                result = self.scored_model.recognize(audio, sample_rate=SAMPLE_RATE)
+                logprobs = list(result.logprobs or [])
+                return str(result.text).strip(), (float(np.mean(logprobs)) if logprobs else None)
+            except Exception as error:  # noqa: BLE001 - reported once; plain transcription continues
+                self.scored_failed = True
+                print(f"speech worker STT log-probability path failed; continuing without it: "
+                      f"{error}", file=sys.stderr, flush=True)
+        return self.transcribe(audio), None
 
 
 def _sentences(text: str) -> list[str]:
@@ -282,34 +315,57 @@ class SpeakerState:
     pcm_bytes: bytearray = field(default_factory=bytearray)
     audio: list[np.ndarray] = field(default_factory=list)
     speaking: bool = False
+    start_run: int = 0  # Consecutive voiced frames while waiting for speech_start.
+    start_gap: int = 0  # Silent frames since the last voiced frame while waiting.
+    last_frame_at: float = 0.0
     silence_frames: int = 0
     silence_started: float | None = None
     pause_checked: bool = False
     last_prob: float = 0.0
     last_text: str = ""
+    last_logprob: float | None = None
     clipped: bool = False
+    voiced_frames: int = 0
+    vad_sum: float = 0.0
+    vad_frames: int = 0
+    sustained_sent: bool = False
+
+    @property
+    def voiced_ms(self) -> int:
+        return round(self.voiced_frames * FRAME_MS)
 
     def clear_turn(self) -> None:
-        self.pcm_bytes.clear()
+        # pcm_bytes is the frame remainder of the input stream, not part of the turn;
+        # clearing it here would drop the rest of a chunk still being fed.
         self.audio.clear()
         self.speaking = False
+        self.start_run = 0
+        self.start_gap = 0
         self.silence_frames = 0
         self.silence_started = None
         self.pause_checked = False
         self.last_prob = 0.0
         self.last_text = ""
+        self.last_logprob = None
         self.clipped = False
+        self.voiced_frames = 0
+        self.vad_sum = 0.0
+        self.vad_frames = 0
+        self.sustained_sent = False
 
 
 class SpeechPipeline:
     """Per-speaker streaming state machine, with model dependencies injectable."""
 
-    def __init__(self, vad, turn_scorer, stt, emit: Callable[[dict], None], clock=time.monotonic):
+    def __init__(self, vad, turn_scorer, stt, emit: Callable[[dict], None], clock=time.monotonic,
+                 clips_dir: Path | None = None):
         self.vad = vad
         self.turn_scorer = turn_scorer
         self.stt = stt
         self.emit = emit
         self.clock = clock
+        self.clips_dir = clips_dir
+        self.clip_count = 0
         self.speakers: dict[str, SpeakerState] = {}
 
     def reset(self, speaker: str) -> None:
@@ -322,6 +378,17 @@ class SpeechPipeline:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(state.audio)
 
+    @staticmethod
+    def _append(state: SpeakerState, frame: np.ndarray, probability: float) -> None:
+        state.audio.append(frame)
+        if len(state.audio) > MAX_UTTERANCE_FRAMES:
+            del state.audio[:len(state.audio) - MAX_UTTERANCE_FRAMES]
+            state.clipped = True
+        state.vad_sum += probability
+        state.vad_frames += 1
+        if probability >= VAD_START_THRESHOLD:
+            state.voiced_frames += 1
+
     def feed(self, speaker: str, pcm: bytes) -> None:
         speaker = str(speaker)
         state = self.speakers.setdefault(speaker, SpeakerState())
@@ -332,25 +399,37 @@ class SpeechPipeline:
             frame = np.frombuffer(frame_bytes, dtype="<i2").astype(np.float32) / 32768.0
             now = self.clock()
             probability = self.vad.score(speaker, frame)
+            state.last_frame_at = now
+            voiced = probability >= VAD_START_THRESHOLD
 
             if not state.speaking:
-                if probability >= VAD_START_THRESHOLD:
-                    state.speaking = True
-                    state.audio = [frame]
-                    state.silence_frames = 0
-                    state.silence_started = None
-                    state.pause_checked = False
-                    self.emit({"ev": "speech_start", "speaker": speaker})
+                if not voiced and not state.audio:
+                    continue
+                self._append(state, frame, probability)
+                if voiced:
+                    state.start_run += 1
+                    state.start_gap = 0
+                    if state.start_run >= SPEECH_START_FRAMES:
+                        state.speaking = True
+                        self.emit({"ev": "speech_start", "speaker": speaker})
+                else:
+                    # Keep a brief dip so a real onset is never lost, but drop a
+                    # burst that ends before it can count as speech.
+                    state.start_run = 0
+                    state.start_gap += 1
+                    if state.start_gap >= SPEECH_START_GAP_FRAMES:
+                        state.clear_turn()
                 continue
 
-            state.audio.append(frame)
-            if len(state.audio) > MAX_UTTERANCE_FRAMES:
-                del state.audio[:len(state.audio) - MAX_UTTERANCE_FRAMES]
-                state.clipped = True
-            if probability >= VAD_START_THRESHOLD:
+            self._append(state, frame, probability)
+            if voiced:
                 state.silence_frames = 0
                 state.silence_started = None
                 state.pause_checked = False
+                if not state.sustained_sent and state.voiced_ms >= SUSTAINED_MS:
+                    state.sustained_sent = True
+                    self.emit({"ev": "speech_sustained", "speaker": speaker,
+                               "voiced_ms": state.voiced_ms})
                 continue
             if probability < VAD_CONTINUE_THRESHOLD:
                 state.silence_frames += 1
@@ -361,50 +440,216 @@ class SpeechPipeline:
                 state.silence_started = None
                 state.pause_checked = False
 
-            if (not state.pause_checked and
-                    state.silence_frames * FRAME_SAMPLES * 1000 / SAMPLE_RATE >= PAUSE_MS):
+            if not state.pause_checked and state.silence_frames * FRAME_MS >= PAUSE_MS:
                 state.pause_checked = True
                 self._evaluate_pause(speaker, state, now)
+
+    def _transcribe(self, audio: np.ndarray) -> tuple[str, float | None]:
+        """Use the STT's scored transcription when it offers one; otherwise text only."""
+        scored = getattr(self.stt, "transcribe_scored", None)
+        if scored is not None:
+            text, logprob = scored(audio)
+            return str(text).strip(), (None if logprob is None else float(logprob))
+        return str(self.stt.transcribe(audio)).strip(), None
+
+    @staticmethod
+    def _metrics(state: SpeakerState) -> dict:
+        vad_mean = state.vad_sum / state.vad_frames if state.vad_frames else 0.0
+        logprob = None if state.last_logprob is None else round(state.last_logprob, 4)
+        return {"voiced_ms": state.voiced_ms, "vad_mean": round(vad_mean, 3), "stt_logprob": logprob}
+
+    @staticmethod
+    def _timeout_ms(state: SpeakerState) -> int:
+        words = state.last_text.lower().split()
+        last_word = words[-1].strip(".,!?;:'\"()[]{}") if words else ""
+        if state.last_prob < 0.05 and last_word in CONNECTORS:
+            return CONNECTOR_TIMEOUT_MS
+        return NORMAL_TIMEOUT_MS
 
     def _evaluate_pause(self, speaker: str, state: SpeakerState, now: float) -> None:
         audio = self._audio(state)
         stt_started = time.perf_counter()
-        state.last_text = self.stt.transcribe(audio)
+        state.last_text, state.last_logprob = self._transcribe(audio)
         stt_ms = round((time.perf_counter() - stt_started) * 1000)
         turn_started = time.perf_counter()
         state.last_prob = self.turn_scorer.score(audio)
         turn_ms = round((time.perf_counter() - turn_started) * 1000)
         self.emit({"ev": "pause", "speaker": speaker, "prob": state.last_prob, "text": state.last_text,
                    "incomplete": state.clipped,
-                   "ms": {"stt": stt_ms, "smart_turn": turn_ms}})
+                   "ms": {"stt": stt_ms, "smart_turn": turn_ms}, **self._metrics(state)})
         silence_ms = max(0.0, (now - state.silence_started) * 1000) if state.silence_started is not None else 0.0
-        last_word = state.last_text.lower().strip().split()[-1].strip(".,!?;:'\"()[]{}") if state.last_text.strip() else ""
-        timeout_ms = CONNECTOR_TIMEOUT_MS if state.last_prob < 0.05 and last_word in CONNECTORS else NORMAL_TIMEOUT_MS
-        if state.last_prob > TURN_THRESHOLD or silence_ms >= timeout_ms:
+        if state.last_prob > TURN_THRESHOLD or silence_ms >= self._timeout_ms(state):
             self._finish(speaker, state, now)
 
     def _finish(self, speaker: str, state: SpeakerState, now: float) -> None:
         text = state.last_text
-        duration_ms = round(len(self._audio(state)) * 1000 / SAMPLE_RATE)
+        audio = self._audio(state)
+        duration_ms = round(len(audio) * 1000 / SAMPLE_RATE)
+        metrics = self._metrics(state)
         self.emit({"ev": "turn_end", "speaker": speaker, "text": text,
-                   "incomplete": state.clipped, "ms": {"utterance": duration_ms}})
+                   "incomplete": state.clipped, "ms": {"utterance": duration_ms}, **metrics})
+        clip = self._write_clip(speaker, audio)
+        print(f"speech turn_end speaker={speaker} utterance_ms={duration_ms} "
+              f"voiced_ms={metrics['voiced_ms']} vad_mean={metrics['vad_mean']} "
+              f"stt_logprob={metrics['stt_logprob']} incomplete={state.clipped} "
+              f"text={text[:120]!r}" + (f" clip={clip}" if clip else ""),
+              file=sys.stderr, flush=True)
         state.clear_turn()
 
+    def _write_clip(self, speaker: str, audio: np.ndarray) -> Path | None:
+        """Save the finished utterance as a 16 kHz mono wav when clip capture is enabled."""
+        if self.clips_dir is None or not len(audio):
+            return None
+        self.clip_count += 1
+        stamp = time.strftime("%Y%m%dT%H%M%S")
+        safe_speaker = re.sub(r"[^A-Za-z0-9_-]", "_", speaker)[:32] or "speaker"
+        path = self.clips_dir / f"{stamp}-{self.clip_count:04d}-{safe_speaker}.wav"
+        try:
+            self.clips_dir.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(path), "wb") as clip:
+                clip.setnchannels(1)
+                clip.setsampwidth(2)
+                clip.setframerate(SAMPLE_RATE)
+                # Exact inverse of the int16 / 32768 decode in feed().
+                samples = np.clip(np.round(audio * 32768.0), -32768, 32767).astype("<i2")
+                clip.writeframes(samples.tobytes())
+        except OSError as error:
+            print(f"speech worker clip write failed ({path}): {error}", file=sys.stderr, flush=True)
+            return None
+        return path
+
     def check_timeouts(self) -> None:
-        """Advance silence fallbacks during input gaps, without requiring dummy frames."""
+        """Advance silence fallbacks during input gaps, without requiring dummy frames.
+
+        Discord stops delivering frames shortly after the owner goes quiet, so the
+        time since the last frame counts as silence here: it can drop a short
+        pending burst, trigger the pause evaluation, and end a low-confidence turn.
+        """
         now = self.clock()
         for speaker, state in list(self.speakers.items()):
-            if not state.speaking or state.silence_started is None or not state.last_text:
+            gap_ms = (now - state.last_frame_at) * 1000
+            if not state.speaking:
+                if state.audio and gap_ms >= PAUSE_MS:
+                    state.clear_turn()
                 continue
-            silence_ms = (now - state.silence_started) * 1000
-            last_word = state.last_text.lower().strip().split()[-1].strip(".,!?;:'\"()[]{}")
-            timeout_ms = CONNECTOR_TIMEOUT_MS if state.last_prob < 0.05 and last_word in CONNECTORS else NORMAL_TIMEOUT_MS
-            if silence_ms >= timeout_ms:
+            if not state.pause_checked:
+                silence_since = state.last_frame_at if state.silence_started is None else state.silence_started
+                if (now - silence_since) * 1000 < PAUSE_MS:
+                    continue
+                state.silence_started = silence_since
+                state.pause_checked = True
+                self._evaluate_pause(speaker, state, now)
+                continue
+            if state.silence_started is None:
+                continue
+            if (now - state.silence_started) * 1000 >= self._timeout_ms(state):
                 self._finish(speaker, state, now)
 
 
 def _emit(event: dict) -> None:
     print(json.dumps(event, separators=(",", ":")), flush=True)
+
+
+class LineSource(Protocol):
+    def readline(self, timeout: float) -> str | None:
+        """Return the next line without its newline, "" at end of input, None on timeout."""
+
+
+class LineReader:
+    """Newline-delimited reader over a file descriptor with a poll timeout.
+
+    It reads the descriptor directly, so a line already buffered here is returned
+    without waiting for more input (a TextIOWrapper's buffer would be invisible
+    to select and could hold a message until the next audio frame arrived).
+    """
+
+    def __init__(self, fd: int, chunk_size: int = 1 << 16):
+        self.fd = fd
+        self.chunk_size = chunk_size
+        self.buffer = bytearray()
+        self.eof = False
+
+    def readline(self, timeout: float) -> str | None:
+        while True:
+            index = self.buffer.find(b"\n")
+            if index >= 0:
+                line = bytes(self.buffer[:index])
+                del self.buffer[:index + 1]
+                return line.decode("utf-8", errors="replace")
+            if self.eof:
+                if not self.buffer:
+                    return ""
+                line = bytes(self.buffer)
+                self.buffer.clear()
+                return line.decode("utf-8", errors="replace")
+            ready, _, _ = select.select([self.fd], [], [], timeout)
+            if not ready:
+                return None
+            chunk = os.read(self.fd, self.chunk_size)
+            if not chunk:
+                self.eof = True
+            self.buffer.extend(chunk)
+
+
+def handle_message(line: str, pipeline: SpeechPipeline, speech: SpeechWorker | None,
+                   emit: Callable[[dict], None]) -> None:
+    """Apply one JSON control line; input errors are reported, not raised."""
+    if not line.strip():
+        return
+    operation = None
+    try:
+        message = json.loads(line)
+        operation = message.get("op")
+        if operation == "ping":
+            emit({"ev": "pong", "id": str(message.get("id", ""))})
+        elif operation in ("say", "cancel"):
+            identifier = str(message.get("id", ""))
+            if not identifier:
+                raise ValueError("id is required")
+            if speech is None:
+                raise ValueError("speech output is unavailable")
+            if operation == "say":
+                speech.say(identifier, str(message.get("text", "")))
+            else:
+                speech.cancel(identifier)
+        elif operation in ("reset", "audio"):
+            speaker = str(message.get("speaker", ""))
+            if not speaker:
+                raise ValueError("speaker is required")
+            if operation == "reset":
+                pipeline.reset(speaker)
+            else:
+                pcm = base64.b64decode(message["pcm"], validate=True)
+                pipeline.feed(speaker, pcm)
+            pipeline.check_timeouts()
+        else:
+            raise ValueError(f"unsupported operation: {operation!r}")
+    except Exception as error:
+        print(f"speech worker input error: {error}", file=sys.stderr, flush=True)
+        if operation == "audio" and "Available memory" in str(error):
+            # ONNX's CUDA arena is exhausted. The current utterance cannot
+            # recover in place; let WorkerClient restart the model process
+            # instead of silently failing on every later utterance.
+            raise SystemExit(2) from error
+
+
+def serve_step(source: LineSource, pipeline: SpeechPipeline, speech: SpeechWorker | None,
+               emit: Callable[[dict], None], timeout_s: float = INPUT_POLL_MS / 1000) -> bool:
+    """Handle one input line, or one idle poll timeout; return False at end of input."""
+    line = source.readline(timeout_s)
+    if line is None:
+        pipeline.check_timeouts()
+        return True
+    if line == "":
+        return False
+    handle_message(line, pipeline, speech, emit)
+    return True
+
+
+def serve(source: LineSource, pipeline: SpeechPipeline, speech: SpeechWorker | None,
+          emit: Callable[[dict], None], timeout_s: float = INPUT_POLL_MS / 1000) -> None:
+    while serve_step(source, pipeline, speech, emit, timeout_s):
+        pass
 
 
 def main() -> None:
@@ -419,47 +664,15 @@ def main() -> None:
         if not path.is_file():
             raise FileNotFoundError(f"required Jester model is missing: {path}")
     vad = SileroVAD(models / "silero_vad.onnx")
-    pipeline = SpeechPipeline(vad, TurnScorer(), ParakeetSTT(), _emit)
+    clips_dir = debug_clips_dir()
+    pipeline = SpeechPipeline(vad, TurnScorer(), ParakeetSTT(), _emit, clips_dir=clips_dir)
     speech = SpeechWorker(pipeline, KokoroTTS(models), _emit)
     print(f"Jester speech models ready; Parakeet GPU arena cap={PARAKEET_GPU_MEM_LIMIT} bytes; "
           f"{_vram_usage()} after model load (startup peak snapshot)", file=sys.stderr, flush=True)
+    if clips_dir is not None:
+        print(f"Jester debug clips enabled: {clips_dir}", file=sys.stderr, flush=True)
     _emit({"ev": "ready"})
-    for line in sys.stdin:
-        operation = None
-        try:
-            message = json.loads(line)
-            operation = message.get("op")
-            if operation == "ping":
-                _emit({"ev": "pong", "id": str(message.get("id", ""))})
-            elif operation == "say":
-                identifier = str(message.get("id", ""))
-                if not identifier:
-                    raise ValueError("id is required")
-                speech.say(identifier, str(message.get("text", "")))
-            elif operation == "cancel":
-                identifier = str(message.get("id", ""))
-                if not identifier:
-                    raise ValueError("id is required")
-                speech.cancel(identifier)
-            elif operation in ("reset", "audio"):
-                speaker = str(message.get("speaker", ""))
-                if not speaker:
-                    raise ValueError("speaker is required")
-                if operation == "reset":
-                    pipeline.reset(speaker)
-                else:
-                    pcm = base64.b64decode(message["pcm"], validate=True)
-                    pipeline.feed(speaker, pcm)
-                pipeline.check_timeouts()
-            else:
-                raise ValueError(f"unsupported operation: {operation!r}")
-        except Exception as error:
-            print(f"speech worker input error: {error}", file=sys.stderr, flush=True)
-            if operation == "audio" and "Available memory" in str(error):
-                # ONNX's CUDA arena is exhausted. The current utterance cannot
-                # recover in place; let WorkerClient restart the model process
-                # instead of silently failing on every later utterance.
-                raise SystemExit(2) from error
+    serve(LineReader(sys.stdin.fileno()), pipeline, speech, _emit)
     speech.close()
 
 
