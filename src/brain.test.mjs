@@ -88,3 +88,26 @@ test("a hung turn kills the stale app-server and the next owner turn starts clea
     await brain.close();
   }
 });
+
+test("the Codex brain never inherits Discord or EBI credentials", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { DISCORD_BOT_TOKEN: "discord-secret", JESTER_EBI_API_SECRET: "ebi-secret",
+    CCDB_API_SECRET: "relay-secret", JESTER_TEST_KEEP: "kept" });
+  let seen = null;
+  const brain = makeBrain({ spawnProcess: (command, args, options) => {
+    seen = options.env;
+    throw new Error("stop after spawn options");
+  } });
+  try {
+    await assert.rejects(brain.prewarm());
+    assert.ok(seen, "spawn received an explicit environment");
+    assert.equal(seen.JESTER_TEST_KEEP, "kept");
+    for (const key of ["DISCORD_BOT_TOKEN", "JESTER_EBI_API_SECRET", "CCDB_API_SECRET"]) {
+      assert.equal(seen[key], undefined, `${key} must not reach the model's process`);
+    }
+  } finally {
+    await brain.close();
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});

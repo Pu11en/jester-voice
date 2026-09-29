@@ -233,3 +233,42 @@ test("a posted result is not posted again when saving that fact fails", async ()
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("while the owner is away, finished work is neither spoken nor posted", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-events-"));
+  let now = Date.parse("2026-09-28T12:00:00Z");
+  const posts = [];
+  let announced = 0;
+  const client = { turnUpdates: async () => empty(), threadMessages: async () => [
+    { is_bot: true, content: "- Try the local page", created_at: "2026-09-28T12:00:03Z" },
+  ] };
+  const deps = new Dependencies({ client, ownerId: "488763953397235712",
+    file: join(dir, "dependencies.json"), now: () => now, logger: { warn() {} } });
+  const presence = { inPresence: false, joined: false, paused: false };
+  const watcher = new EventWatcher({ client, dependencies: deps,
+    conversation: { mode: "conversation", turn: null, reply: null,
+      announce: () => { announced += 1; return true; } },
+    presence, postResults: async (...args) => posts.push(args),
+    file: join(dir, "events.json"), now: () => now, intervalMs: 60_000, logger: { warn() {} } });
+  try {
+    await deps.start();
+    await deps.addResultWatch({ sources: [{ threadId, label: "franky" }] });
+    await deps.accepted(threadId, { accepted_at: "2026-09-28T12:00:02Z" });
+    await watcher.start();
+    await tickWait(); // let the start-up poll finish so each tick below really runs
+    for (let i = 0; i < 5; i += 1) {
+      now += 60_000;
+      assert.equal(watcher.polling, false);
+      await watcher.tick();
+    }
+    assert.deepEqual([announced, posts.length], [0, 0]);
+    assert.equal(deps.readyResultWatches().length, 1, "kept for when the owner returns");
+    Object.assign(presence, { inPresence: true, joined: true });
+    await watcher.tick();
+    assert.deepEqual([announced, posts.length], [1, 1]);
+  } finally {
+    await watcher.close();
+    await deps.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

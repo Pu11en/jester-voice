@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
+import { childEnv } from "./child-env.mjs";
 
 const LEAN_ARGS = [
   "-c", "mcp_servers={}",
@@ -86,6 +87,7 @@ export class Brain extends EventEmitter {
     if (this.closed) throw new Error("Brain is closed");
     const child = this.spawnProcess(this.command, ["app-server", ...this.args], {
       cwd: this.cwd,
+      env: childEnv(),
       stdio: ["pipe", "pipe", "ignore"],
     });
     this.child = child;

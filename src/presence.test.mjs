@@ -312,3 +312,20 @@ test("owner departure after a leave survives a failed dismissal save", async () 
     process.off("unhandledRejection", onRejection);
   }
 });
+
+test("an absent owner costs no brain warm-up, connection or reconnect attempts", async () => {
+  const { presence, calls, client } = setup({ channelId: null });
+  await presence.start();
+  client.emit("voiceStateUpdate", {}, { id: "someone-else", guild: { id: "guild" }, channelId: "room" });
+  presence.onVoiceDisconnect(); // a stray transport event while nobody is there
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual([calls.prewarm, calls.connect], [0, 0]);
+  client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: "room" });
+  await waitFor(() => calls.prewarm === 1);
+  client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: null });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  presence.onVoiceDisconnect();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual([calls.prewarm, calls.connect], [1, 1], "nothing more after the owner left");
+  presence.stop();
+});

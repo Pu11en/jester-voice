@@ -15,6 +15,7 @@ import { EventWatcher } from "./event-watcher.mjs";
 import { Dependencies } from "./dependencies.mjs";
 import { ActionJournal } from "./action-journal.mjs";
 import { IntentProposer } from "./intent-proposer.mjs";
+import { childEnv } from "./child-env.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -36,7 +37,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
     command: config.python,
     args: [resolve(projectRoot, "worker/speech.py")],
     cwd: projectRoot,
-    env: { ...process.env, JESTER_MODELS_DIR: config.modelsDir },
+    env: childEnv(process.env, { JESTER_MODELS_DIR: config.modelsDir }),
   });
   const voice = createVoiceImpl({ config, onAudio: (speaker, pcm) => {
     worker.send({ op: "audio", speaker, pcm: pcm.toString("base64") });
