@@ -462,3 +462,51 @@ test("a detected brain outage gets the honest Luna line while a misparse asks ag
     intent: { kind: "clarify", reason: "proposal-invalid" } }),
   "Please say the final task once more so I send the right words.");
 });
+
+const foreign = [
+  { threadId: "1554300000000000001", name: "📂 youtube-money", ownerId: "1550644558176460961",
+    ownerName: "david", channel: "control-center" },
+  { threadId: "1554300000000000002", name: "cranesignal", ownerId: "1550644558176460961",
+    ownerName: "david", channel: "workers" },
+  { threadId: "1554300000000000003", name: "📂 meme-explorer", ownerId: "1546757772052537385",
+    ownerName: "I mac codex", channel: "control-center" },
+  { threadId: "1554300000000000004", name: "📂 ebi-agent-chat-relay", ownerId: "1546757772052537385",
+    ownerName: "I mac codex", channel: "control-center" },
+];
+
+test("list-open speaks EBI sessions first, then other bots' threads grouped by owner", async () => {
+  const { router, client, calls, setRows } = snapshotOnly();
+  setRows([podlox]);
+  const before = await router.handle("What's open?", { speakerId: ownerId });
+  assert.equal(before, "1 open session: podlox (tag zoro, recovering).");
+  client.otherThreads = [];
+  assert.equal(await router.handle("What's open?", { speakerId: ownerId }), before);
+  client.otherThreads = foreign;
+  assert.equal(await router.handle("What's open?", { speakerId: ownerId }),
+    "1 open session: podlox (tag zoro, recovering). Also open in Discord, run by other bots: " +
+    "youtube-money and cranesignal by david; meme-explorer and ebi-agent-chat-relay by I mac codex.");
+  client.otherThreads = [...foreign, { threadId: "1554300000000000005", name: "[x] 🧪 lab", ownerId: "",
+    ownerName: "", channel: "" }, ...["a1", "b2", "c3"].map((name, i) => ({ threadId: `155430000000000001${i}`,
+    name, ownerId: "9", ownerName: "", channel: "" }))];
+  assert.equal(await router.handle("What's open?", { speakerId: ownerId }),
+    "1 open session: podlox (tag zoro, recovering). Also open in Discord, run by other bots: " +
+    "youtube-money and cranesignal by david; meme-explorer and ebi-agent-chat-relay by I mac codex; " +
+    "lab by someone else; a1 by someone else; and 2 more.");
+  assert.equal(calls.length, 0);
+});
+
+test("see-one and find name the other bot that runs a foreign thread", async () => {
+  const { router, client, setRows } = snapshotOnly();
+  setRows([podlox, oldAudit]);
+  client.otherThreads = foreign;
+  assert.equal(await router.handle("Do you see youtube money?", { speakerId: ownerId }),
+    "Yes, youtube-money is open in Discord, but david runs it, so I can't see its work or send it tasks.");
+  assert.equal(await router.handle("Do you see podlox?", { speakerId: ownerId }),
+    "Yes, podlox is open. Tag zoro, recovering.");
+  assert.equal(await router.handle("Do you see old audit?", { speakerId: ownerId }), "No, Old audit is closed.");
+  assert.equal(await router.handle("Find meme explorer", { speakerId: ownerId }),
+    "I found meme-explorer in Discord, but I mac codex runs it, so I can't see its work or send it tasks.");
+  client.otherThreads = [{ ...foreign[0], ownerId: "", ownerName: "" }];
+  assert.equal(await router.handle("Is youtube money open?", { speakerId: ownerId }),
+    "Yes, youtube-money is open in Discord, but someone else runs it, so I can't see its work or send it tasks.");
+});

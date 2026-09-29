@@ -21,6 +21,8 @@ export class EbiClient {
     this.pendingSnapshot = null;
     // Snapshot totals EBI is adding (open_count, discord_active_threads); null until it sends them.
     this.lastSnapshotMeta = { openCount: null, discordActiveThreads: null };
+    // Active Discord threads run by other bots or people (other_threads); never send targets.
+    this.otherThreads = [];
   }
 
   async #request(path, options = {}) {
@@ -48,7 +50,7 @@ export class EbiClient {
         discordActiveThreads: Number.isInteger(body.discord_active_threads) ? body.discord_active_threads : null,
       };
       const ids = new Set();
-      return body.sessions.map((raw) => {
+      const sessions = body.sessions.map((raw) => {
         // JSON numbers lose bits from Discord snowflakes. Never guess a target.
         if (typeof raw.thread_id !== "string" || !THREAD_ID.test(raw.thread_id) || ids.has(raw.thread_id)) {
           throw new Error("EBI session snapshot has an invalid or duplicate thread ID");
@@ -68,6 +70,17 @@ export class EbiClient {
           visible: typeof raw.visible === "boolean" ? raw.visible : null,
         };
       });
+      this.otherThreads = (Array.isArray(body.other_threads) ? body.other_threads : [])
+        .filter(raw => typeof raw?.thread_id === "string" && THREAD_ID.test(raw.thread_id) &&
+          !ids.has(raw.thread_id))
+        .map(raw => ({
+          threadId: raw.thread_id,
+          name: String(raw.name || ""),
+          ownerId: String(raw.owner_id || ""),
+          ownerName: String(raw.owner_name || ""),
+          channel: String(raw.channel || ""),
+        }));
+      return sessions;
     })();
     try { return await this.pendingSnapshot; }
     finally { this.pendingSnapshot = null; }

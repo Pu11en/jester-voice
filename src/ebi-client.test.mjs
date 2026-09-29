@@ -139,3 +139,26 @@ test("snapshot accepts the coming visibility fields and today's shape alike", as
   assert.deepEqual(client.lastSnapshotMeta, { openCount: 24, discordActiveThreads: 2 });
   assert.equal((await client.resolveTag("franky")).kind, "found", "visibility never hides a target");
 });
+
+test("snapshot keeps other bots' active threads and an empty list when EBI omits them", async () => {
+  let body = { sessions: [session("1553899450227757156", "franky")] };
+  const client = new EbiClient({ fetchImpl: async () => ({ ok: true, json: async () => body }) });
+  await client.snapshot();
+  assert.deepEqual(client.otherThreads, []);
+  body = { sessions: [session("1553899450227757156", "franky")], other_threads: [
+    { thread_id: "1554300000000000001", name: "📂 youtube-money", owner_id: "1550644558176460961",
+      owner_name: "david", channel: "control-center" },
+    { thread_id: 1554300000000000002, name: "lossy number id" },
+    { thread_id: "1553899450227757156", name: "an EBI session is not foreign" },
+    { thread_id: "1554300000000000003", name: "cranesignal" },
+  ] };
+  await client.snapshot();
+  assert.deepEqual(client.otherThreads, [
+    { threadId: "1554300000000000001", name: "📂 youtube-money", ownerId: "1550644558176460961",
+      ownerName: "david", channel: "control-center" },
+    { threadId: "1554300000000000003", name: "cranesignal", ownerId: "", ownerName: "", channel: "" },
+  ]);
+  body = { sessions: [] };
+  await client.snapshot();
+  assert.deepEqual(client.otherThreads, [], "an older EBI clears a previous list");
+});

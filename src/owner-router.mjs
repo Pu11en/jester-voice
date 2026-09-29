@@ -19,6 +19,15 @@ const spokenState = state => (!state || state === "history") ? "idle" : String(s
 const compact = value => String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 const tagPhrase = (row, capital = false) => row.tag ? `${capital ? "Tag" : "tag"} ${row.tag}` : `${capital ? "No" : "no"} tag`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const OTHER_MAX = 6;
+/** A Discord thread name for speech: no leading "[tag] " and no leading emoji like "📂 ". */
+const threadSpoken = name => String(name || "").replace(/^\s*\[[^\]]*\]\s*/u, "")
+  .replace(/^[^\p{L}\p{N}]+/u, "").trim();
+const runner = thread => thread.ownerName || "someone else";
+const andJoin = items => items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+const foreignRows = threads => threads.map(thread => ({ tag: "", aliases: [], name: threadSpoken(thread.name),
+  project: "", thread }));
+const cannotSee = thread => `but ${runner(thread)} runs it, so I can't see its work or send it tasks.`;
 
 function jaroWinkler(a, b) {
   if (a === b) return 1;
@@ -187,9 +196,25 @@ export class OwnerRouter {
     return `${name} is ${state}${project}.${task}${recent}`;
   }
 
-  #listOpen(rows) {
+  /** Active Discord threads other bots or people run; EBI may not send them yet. */
+  #others() { return Array.isArray(this.client.otherThreads) ? this.client.otherThreads : []; }
+
+  #otherSentence(others) {
+    const groups = new Map();
+    for (const thread of others.slice(0, OTHER_MAX)) {
+      const key = thread.ownerId || thread.ownerName || "";
+      if (!groups.has(key)) groups.set(key, { owner: runner(thread), names: [] });
+      groups.get(key).names.push(threadSpoken(thread.name) || "an unnamed thread");
+    }
+    const parts = [...groups.values()].map(group => `${andJoin(group.names)} by ${group.owner}`);
+    if (others.length > OTHER_MAX) parts.push(`and ${others.length - OTHER_MAX} more`);
+    return `Also open in Discord, run by other bots: ${parts.join("; ")}.`;
+  }
+
+  #listOpen(rows, others = []) {
+    const also = others.length ? ` ${this.#otherSentence(others)}` : "";
     const open = rows.filter(isOpen);
-    if (!open.length) return "No sessions are open right now.";
+    if (!open.length) return also ? `No EBI sessions are open right now.${also}` : "No sessions are open right now.";
     const named = open.filter(row => displayName(row));
     const parts = named.slice(0, LIST_MAX).map(row =>
       `${displayName(row)} (${tagPhrase(row)}, ${spokenState(row.state)})`);
@@ -197,7 +222,7 @@ export class OwnerRouter {
     if (open.length > named.length) parts.push(`and ${open.length - named.length} more without names`);
     const hidden = open.filter(row => row.visible === false).length;
     const visibility = hidden ? ` ${hidden} of them ${hidden === 1 ? "isn't" : "aren't"} visible in Discord.` : "";
-    return `${plural(open.length, "open session")}: ${parts.join("; ")}.${visibility}`;
+    return `${plural(open.length, "open session")}: ${parts.join("; ")}.${visibility}${also}`;
   }
 
   #whyNoTag(rows, target) {
@@ -251,6 +276,10 @@ export class OwnerRouter {
     }
     const closed = matchSession(rows.filter(row => !isOpen(row)), target);
     if (closed.kind === "found") return `No, ${displayName(closed.session) || target} is closed.`;
+    const other = matchSession(foreignRows(this.#others()), target);
+    if (other.kind === "found") {
+      return `Yes, ${other.session.name || target} is open in Discord, ${cannotSee(other.session.thread)}`;
+    }
     if (match.closest) return `No, I don't see ${target} open. The closest open one is ${displayName(match.closest) || match.closest.tag}.`;
     return `No, I don't see an open session called ${target}.`;
   }
@@ -270,7 +299,10 @@ export class OwnerRouter {
       if (intent.reason === "proposal-unavailable") return BRAIN_OUT_LINE;
       return "Please say the final task once more so I send the right words.";
     }
-    if (intent.kind === "list-open") return this.#listOpen(await this.client.snapshot());
+    if (intent.kind === "list-open") {
+      const rows = await this.client.snapshot();
+      return this.#listOpen(rows, this.#others());
+    }
     if (intent.kind === "why-no-tag") return this.#whyNoTag(await this.client.snapshot(), intent.target);
     if (intent.kind === "see-one") return this.#seeOne(intent.target, allowReference);
     if (intent.kind === "status-all") {
@@ -295,6 +327,12 @@ export class OwnerRouter {
       if (rows.length > 1) {
         const names = rows.slice(0, 5).map(row => `${displayName(row) || row.tag} (${tagPhrase(row)}, ${spokenState(row.state)})`);
         return `I found ${rows.length} open sessions matching ${intent.query}: ${names.join("; ")}.`;
+      }
+      const foreign = searchRows(foreignRows(this.#others()), intent.query);
+      if (foreign.length === 1) return `I found ${foreign[0].name || intent.query} in Discord, ${cannotSee(foreign[0].thread)}`;
+      if (foreign.length > 1) {
+        const names = foreign.slice(0, 5).map(row => `${row.name || "an unnamed thread"} by ${runner(row.thread)}`);
+        return `I found ${foreign.length} threads other bots run matching ${intent.query}: ${names.join("; ")}.`;
       }
       if (!this.client.searchSessions) return `I couldn't find an open session about ${intent.query}.`;
       let found;
