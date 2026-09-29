@@ -34,7 +34,9 @@ export class RoomTranscript {
 
   async start({ channel }) {
     if (this.path) await this.finish();
-    await this.prune();
+    // Old-file cleanup is housekeeping; it must never stop this visit's record.
+    try { await this.prune(); }
+    catch (error) { this.logger.warn?.("[transcript] retention cleanup failed:", error.message); }
     const started = this.now();
     this.id = randomUUID();
     this.started = started;

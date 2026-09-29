@@ -102,3 +102,16 @@ test("prunes only old transcript files inside its directory", async () => {
     assert.equal((await lstat(external)).isSymbolicLink(), true, "symlink is not removed by pruning");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("a failed retention cleanup never prevents recording the new transcript", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-prune-fail-"));
+  const warnings = [];
+  try {
+    const transcript = new RoomTranscript({ directory: dir, logger: { warn: (...a) => warnings.push(a.join(" ")) } });
+    transcript.prune = async () => { throw Object.assign(new Error("permission denied"), { code: "EACCES" }); };
+    const path = await transcript.start({ channel: "room" });
+    assert.match(await readFile(path, "utf8"), /# Voice transcript/);
+    assert.ok(warnings.some(line => line.includes("permission denied")), "the failed cleanup is reported");
+    await transcript.finish();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
