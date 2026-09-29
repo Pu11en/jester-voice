@@ -1,6 +1,6 @@
 # Jester: resume here
 
-Saved September 28, 2026, 19:35 CDT. Full progress record: `sim/STATUS.md`. Product rules: `HANDOFF.md`.
+Saved September 28, 2026, 19:45 CDT. This is the handoff for the next agent. Full progress record: `sim/STATUS.md`. Product rules: `HANDOFF.md`.
 
 ## What is live
 
@@ -22,7 +22,7 @@ Saved September 28, 2026, 19:35 CDT. Full progress record: `sim/STATUS.md`. Prod
 
 ## Open problem: voice tags are all taken
 
-All ten tags are held. Only `zoro` and `nami` are sessions Drew uses. Eight are held by finished task loop workers from the EBI relay build. EBI lists 17 sessions open while Discord had 8 active threads.
+All ten tags are held. Only `zoro` and `nami` are sessions Drew uses. Eight are held by finished task loop workers from the EBI relay build. With `limit=100`, EBI lists 25 sessions open and 23 of them are finished task loop workers. Discord had 8 active threads at 19:11, and Drew sees 3.
 
 Cause: `claude_discord/cogs/task_loop.py` in the EBI repo archives a finished worker thread in Discord but never marks its session closed. Tags are released only for closed sessions. Effect: a session created by voice gets no tag and cannot be addressed by name.
 
@@ -30,9 +30,23 @@ Nothing has been changed for this yet. Proposed fix, in order:
 
 1. Mark the worker session closed when the task loop archives its thread.
 2. Never give a voice tag to a task loop worker or reviewer.
-3. One-time cleanup: close the stale worker sessions to free eight tags.
+3. One-time cleanup: close the stale worker sessions to free eight tags. Identify them by a `working_dir` under `/home/drewp/.local/state/ccdb/gowork/`. Confirm each is idle first.
+
+## How to check things
+
+```bash
+cd /home/drewp/main-projects/jester-voice
+bash scripts/check.sh          # 133 Node tests and 7 Python tests
+node sim/run.mjs               # 16 conversation simulations, no Discord or EBI writes
+systemctl --user is-active jester-voice.service ebi-agent-chat-relay.service
+journalctl --user -u jester-voice.service --since "1 hour ago" --no-pager
+curl -s -H "Authorization: Bearer $CCDB_API_SECRET" "$CCDB_API_URL/api/sessions?limit=100"
+```
+
+EBI source is `/home/drewp/main-projects/ebi-agent-chat-relay`. Tag logic is in `claude_discord/voice_labels.py` and `claude_discord/voice_tags.py`. Tag tests are in `tests/test_voice_labels.py`.
 
 ## Cautions
+- Jester logged one `DAVE audio packet decrypt failed` line at 19:29:40. Cause unknown. Watch for it in the room trial.
 
 - Every EBI restart wakes the task loops and runs a paid Codex turn. It happened at 17:59 and at 19:08.
 - `jq` is not installed. The rollout notifier failed on it. Use Python for JSON in scripts.
