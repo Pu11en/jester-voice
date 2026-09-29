@@ -308,3 +308,9 @@ test("thirty injected lines during an outage keep only the newest 24", () => {
   assert.equal(brain.context[0], "line 6");
   assert.equal(brain.context.at(-1), "line 29");
 });
+
+test("Jester never promises to check or act later from plain chat", () => {
+  assert.doesNotMatch(JESTER_INSTRUCTIONS, /say you'll check/i);
+  assert.match(JESTER_INSTRUCTIONS, /never say you will check/i);
+  assert.match(JESTER_INSTRUCTIONS, /Jester, close luffy/);
+});

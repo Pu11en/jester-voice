@@ -415,6 +415,7 @@ export class Conversation {
         response = await this.ownerRouter.handle(text, {
           speakerId: this.ownerId,
           intent: { kind: "create", project: create.project, instruction: create.instruction,
+            empty: create.empty === true,
             runtime: null, model: null },
           shouldAct: () => this.started && speechVersion === this.ownerSpeechVersion &&
             this.attention.engaged && this.mode === "conversation" && !this.presence?.paused,

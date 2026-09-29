@@ -145,3 +145,31 @@ test("a spoken filler before or after the wake word never hides a command", () =
   assert.equal(parseOwnerIntent("close podlox and then start a new one", { knownTags: tags }), null);
   assert.deepEqual(parseOwnerIntent("Jester, stop Zoro", { knownTags: tags }), { kind: "stop", target: "Zoro" });
 });
+
+test("delete, remove and get rid of close a session, in Drew's own words", () => {
+  const tags = new Set(["luffy"]);
+  for (const said of ["Jester, delete the Luffy session.", "Please delete the uh Luffy session.",
+    "Jester, get rid of luffy", "remove the luffy thread", "kill luffy", "Jester, close the session luffy"]) {
+    assert.deepEqual(parseOwnerIntent(said, { knownTags: tags }), { kind: "close", target: /luffy/i.exec(said)[0] }, said);
+  }
+  assert.equal(parseOwnerIntent("delete luffy and then start a new one", { knownTags: tags }), null);
+});
+
+test("opening a thread in a folder without a task makes an empty session", () => {
+  for (const said of ["Jester, please make a thread inside of the jobs folder.",
+    "please get the thread open inside of the jobs folder", "Yeah, sir, create a uh thread, a session, uh in the jobs folder.",
+    "Jester, open a new session in jobs"]) {
+    assert.deepEqual(parseOwnerIntent(said, {}), { kind: "create", project: "jobs", runtime: null, model: null,
+      instruction: null, empty: true, bare: true }, said);
+  }
+  assert.deepEqual(parseOwnerIntent("start a session in jobs to review my resume", {}),
+    { kind: "create", project: "jobs", runtime: null, model: null, instruction: "review my resume" });
+});
+
+test("an unfinished session request can be opened empty", async () => {
+  const { CreateDraft } = await import("./create-draft.mjs");
+  const draft = new CreateDraft();
+  assert.deepEqual(draft.consume("Jester, open a session in Jobs."), { handled: true, reply: "What should that session work on?" });
+  assert.deepEqual(draft.consume("Nothing yet, just open it."), { handled: true, project: "Jobs", instruction: null, empty: true });
+  assert.deepEqual(new CreateDraft().consume("Jester, please make a thread inside of the jobs folder."), { handled: false });
+});
