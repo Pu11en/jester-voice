@@ -27,3 +27,14 @@ test("discussion, invented task text, and unknown targets cannot become writes",
   assert.equal((await model.propose("Jester, could you ask Zoro to review login, but don't send it yet", ["zoro"])).reason,
     "hold");
 });
+
+test("a proposed instruction must be whole owner words, not a word fragment", async () => {
+  const raw = "Jester, could you ask Zoro to restart the server";
+  for (const instruction of ["art the server", "tart the server", ".", "?"]) {
+    const intent = await proposer({ kind: "message", target: "Zoro", instruction }).propose(raw, ["zoro"]);
+    assert.equal(intent?.kind, "clarify", `${JSON.stringify(instruction)} must not be sent`);
+  }
+  const whole = await proposer({ kind: "message", target: "Zoro", instruction: "restart the server" })
+    .propose(raw, ["zoro"]);
+  assert.deepEqual(whole, { kind: "message", target: "zoro", instruction: "restart the server" });
+});

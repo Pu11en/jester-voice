@@ -323,6 +323,7 @@ export class OwnerRouter {
       return null;
     }
     let receipt;
+    let sentNow = !action || action.fresh;
     try {
       if (action && !action.fresh && ["posted", "failed"].includes(action.item.status)) {
         receipt = action.item.result;
@@ -334,6 +335,7 @@ export class OwnerRouter {
           // EBI reserves the request ID atomically before delivery. A missing
           // receipt can be retried under that same ID without a second post.
           if (!shouldAct()) return null;
+          sentNow = true;
           receipt = await this.client.sendSpoken({ threadId: session.threadId,
             speakerId: this.ownerId, text: intent.instruction, requestId: action.item.id });
         }
@@ -357,7 +359,10 @@ export class OwnerRouter {
     }
     this.trace?.({ kind: "spoken", stage: receipt.status, target: session.threadId,
       actionId: action?.item.id || receipt.request_id || null });
-    if (receipt.status === "posted") return `I posted your task to ${name}.`;
+    if (receipt.status === "posted") {
+      return sentNow ? `I posted your task to ${name}.` :
+        `I already posted that task to ${name}, so I didn't send it again.`;
+    }
     if (receipt.status === "failed") return `Posting to ${name} failed. Please check the thread before trying again.`;
     return `${name} accepted the task, but I couldn't verify the post yet.`;
   }

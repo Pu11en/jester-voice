@@ -9,6 +9,13 @@ Target/project must appear in the utterance. The instruction must be an exact co
 
 const hasWord = (text, word) => new RegExp(`(?<![\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "iu").test(text);
 
+/** The span must be non-empty and start at a word boundary: no clipped first word. */
+function endsWithWholeWords(utterance, span) {
+  if (!/[\p{L}\p{N}]/u.test(span) || !utterance.endsWith(span)) return false;
+  const before = utterance.slice(0, utterance.length - span.length);
+  return !before || !/[\p{L}\p{N}]$/u.test(before) || !/^[\p{L}\p{N}]/u.test(span);
+}
+
 export class IntentProposer {
   constructor({ brain = new Brain({ baseInstructions: INSTRUCTIONS, effort: "low" }) } = {}) {
     this.brain = brain;
@@ -42,7 +49,7 @@ export class IntentProposer {
       .replace(/[?.!]+$/u, "").toLocaleLowerCase();
     if (!["message", "create"].includes(proposal?.kind) ||
         typeof proposal.instruction !== "string" || !proposal.instruction.trim() ||
-        !utteranceEnd.endsWith(instructionEnd)) {
+        !endsWithWholeWords(utteranceEnd, instructionEnd)) {
       return { kind: "clarify", reason: "proposal-invalid" };
     }
     if (proposal.kind === "message") {

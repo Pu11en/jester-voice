@@ -319,3 +319,19 @@ test("a tag reassigned during lookup cannot send to its old destination", async 
   assert.match(await router.handle("Tell Frankie to check login", { speakerId: ownerId }), /tag changed/);
   assert.equal(calls.length, 0);
 });
+
+test("a repeated identical task says it was not sent again", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-route-repeat-"));
+  try {
+    const { client, calls } = setup();
+    const actionJournal = new ActionJournal({ file: join(dir, "actions.json") });
+    await actionJournal.start();
+    const router = new OwnerRouter({ client, ownerId, actionJournal });
+    assert.match(await router.handle("Tell Frankie to check login", { speakerId: ownerId }),
+      /^I posted your task/);
+    const repeat = await router.handle("Tell Frankie to check login", { speakerId: ownerId });
+    assert.equal(calls.length, 1);
+    assert.match(repeat, /didn't send it again/, "a repeat must not sound like a new post");
+    await actionJournal.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
