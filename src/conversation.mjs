@@ -6,10 +6,30 @@ import { appendBounded } from "./bounded-log.mjs";
 import { Attention, modeCommand, possibleModeCommand } from "./attention.mjs";
 import { parseOwnerIntent, isSessionReadFollowUp } from "./owner-intent.mjs";
 import { CreateDraft } from "./create-draft.mjs";
+import { BRAIN_OUT_LINE } from "./owner-router.mjs";
+import { isAffirmative, isBackchannelOnly, isNegative, isStopSpeech, stripLeadingBackchannel }
+  from "./backchannel.mjs";
 
 const MAX_PENDING_TTS_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_LOG_BYTES = 10 * 1024 * 1024;
 const THINKING_DELAY_MS = 2_500;
+// A bare yes/no counts as an answer only this soon after Jester's reply ended with "?".
+const ANSWER_WINDOW_MS = 8_000;
+const STATUS_KINDS = ["status-one", "status-last", "session-discuss"];
+const METRIC_KEYS = ["voiced_ms", "vad_mean", "stt_logprob"];
+
+const sameWords = (a, b) => {
+  const norm = (text) => String(text || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "")
+    .split(/\s+/).filter(Boolean).join(" ");
+  return norm(a) === norm(b);
+};
+
+/** The owner's words plus any worker speech metrics present on the event, for turn rows. */
+function ownerFacts(text, event = {}) {
+  const facts = { ownerText: text?.trim() || null };
+  for (const key of METRIC_KEYS) if (event[key] !== undefined) facts[key] = event[key];
+  return facts;
+}
 
 const heardWords = (text, playedMs) => {
   const words = text.trim().split(/\s+/).filter(Boolean);
@@ -67,6 +87,7 @@ export class Conversation {
     this.ownerSpeaking = false;
     this.ownerAudioIncomplete = false;
     this.lastTimings = null;
+    this.questionEndedAt = null;
     this.interrupting = Promise.resolve();
     this.logQueue = Promise.resolve();
     this.onEvent = (event) => this.#event(event);
@@ -95,7 +116,10 @@ export class Conversation {
     };
     this.onBrainFatal = (error) => {
       this.logger.warn?.("[conversation] brain unavailable:", error.message);
-      if (this.turn && !this.turn.resumed) this.turn.brainFailed = true;
+      if (this.turn && !this.turn.resumed) {
+        this.turn.brainFailed = true;
+        if (error?.reason) this.turn.brainError ??= { reason: error.reason, brain: error.brain ?? null };
+      }
     };
     this.onBrainFirstWord = (event) => {
       if (this.turn && event.requestId === this.turn.requestId && !this.turn.resumed) {
@@ -161,6 +185,13 @@ export class Conversation {
     if (event?.ev === "audio_out") return this.#audioOut(event);
     if (event?.ev === "say_done") return this.#sayDone(event);
     if (event?.ev === "turn_end" && event.text?.trim()) {
+      if (this.#ignoredBackchannel(event)) {
+        // Listening sounds are neither a stop nor a turn, and never reach the room log.
+        if (event.speaker === this.ownerId) this.ownerSpeaking = false;
+        void this.#log({ type: "backchannel_ignored", text: event.text.trim(),
+          speaker: String(event.speaker) });
+        return;
+      }
       void this.transcript?.record(this.voice.displayName?.(event.speaker) || event.speaker, event.text);
     }
     if (event?.speaker !== this.ownerId) {
@@ -179,12 +210,29 @@ export class Conversation {
     }
     if (event.ev === "pause") this.#pause(event);
     else if (event.ev === "speech_start") this.#speechStart();
+    else if (event.ev === "speech_sustained") this.#ownerWords("sustained");
     else if (event.ev === "turn_end") this.#turnEnd(event);
   }
 
+  /** Backchannel-only speech to drop, unless it is a bare yes/no answering Jester's question. */
+  #ignoredBackchannel(event) {
+    if (!isBackchannelOnly(event.text)) return false;
+    if (String(event.speaker) !== this.ownerId) return true;
+    if (event.incomplete || this.ownerAudioIncomplete) return false;
+    const answering = this.questionEndedAt !== null &&
+      this.now() - this.questionEndedAt <= ANSWER_WINDOW_MS;
+    return !(answering && (isAffirmative(event.text) || isNegative(event.text)));
+  }
+
   #pause(event) {
+    const text = event.text?.trim();
+    if (!text || isBackchannelOnly(text)) return;
+    if (this.turn && !this.turn.accepted && !this.turn.resumed && sameWords(this.turn.pauseText, text)) return;
+    // Recognised words, not a bare voice onset, stop Jester and invalidate stale work.
+    this.#ownerWords("words");
+    if (isStopSpeech(text)) return;
     if (event.incomplete || this.ownerAudioIncomplete) return;
-    if (this.turn || !(event.prob > 0.3) || !event.text?.trim()) return;
+    if (this.turn || !(event.prob > 0.3)) return;
     if (this.mode === "transcript" || possibleModeCommand(event.text)) return;
     // Waking requires a completed owner turn; a tentative name must not open
     // the gate, send room speech to Luna, or bypass deterministic controls.
@@ -204,35 +252,54 @@ export class Conversation {
   }
 
   #speechStart() {
+    // A voice onset alone may be a cough, breath or hum: it never stops Jester.
+    this.ownerSpeaking = true;
+    this.worker.dropQueuedAudio?.(this.ownerId, 24);
+  }
+
+  /** The owner is really talking: stop Jester, drop accepted brain work, resume a draft. */
+  #ownerWords(source) {
     this.ownerSpeechVersion += 1;
     this.ownerSpeaking = true;
     void this.intentProposer?.interrupt?.().catch?.(() => {});
     this.#cancelThinking();
     this.#stopLocalClip();
     if (this.reply) {
-      const reply = this.reply;
-      const stopStarted = this.now();
-      this.#stopReply();
-      this.#interrupt("interrupt");
-      const heard = heardWords(reply.text, this.voice.playedMs(reply.id));
-      if (heard) void this.transcript?.record("Jester", heard);
-      if (heard) this.brain.injectContext(`Jester said (heard): ${heard}`);
-      const bargeStopMs = this.now() - stopStarted;
-      if (this.lastTimings) this.lastTimings.bargeInStopMs = bargeStopMs;
-      void this.#log({ type: "barge_in", heard, bargeStopMs,
-        timings: this.lastTimings ? { ...this.lastTimings } : null });
+      this.#bargeIn(source);
       this.turn = null;
     } else if (this.turn?.accepted) {
       this.turn = null;
       this.#interrupt("accepted turn interrupt");
     }
-    this.worker.dropQueuedAudio?.(this.ownerId, 24);
-    if (this.turn && !this.turn.accepted) {
-      const turn = this.turn;
+    if (this.turn && !this.turn.accepted) this.#resumeDraft(this.turn, true);
+  }
+
+  #resumeDraft(turn, interrupt) {
+    if (!turn.resumed) {
       turn.resumed = true;
       turn.carriedText = mergeText(turn.carriedText || "", turn.pauseText);
+    }
+    if (interrupt && !turn.interrupted) {
+      turn.interrupted = true;
       this.#interrupt("draft interrupt");
     }
+  }
+
+  /** Stop the playing reply, keep only the words Drew heard, and interrupt the brain. */
+  #bargeIn(source) {
+    const reply = this.reply;
+    const stopStarted = this.now();
+    this.#stopReply();
+    this.#interrupt("interrupt");
+    const heard = heardWords(reply.text, this.voice.playedMs(reply.id));
+    if (heard && !isBackchannelOnly(heard)) {
+      void this.transcript?.record("Jester", heard);
+      this.brain.injectContext(`Jester said (heard): ${heard}`);
+    }
+    const bargeStopMs = this.now() - stopStarted;
+    if (this.lastTimings) this.lastTimings.bargeInStopMs = bargeStopMs;
+    void this.#log({ type: "barge_in", source, heard, bargeStopMs,
+      timings: this.lastTimings ? { ...this.lastTimings } : null });
   }
 
   async #turnEnd(event) {
@@ -253,6 +320,26 @@ export class Conversation {
       return;
     }
     if (!event.text?.trim()) return;
+    // Real words decide: stop Jester and any accepted brain work before this turn runs.
+    this.ownerSpeechVersion += 1;
+    this.#cancelThinking();
+    this.#stopLocalClip();
+    if (this.reply) {
+      this.#bargeIn("turn_end");
+      this.turn = null;
+    } else if (this.turn?.accepted) {
+      this.turn = null;
+      this.#interrupt("accepted turn interrupt");
+    }
+    if (this.turn && !this.turn.accepted && !sameWords(this.turn.pauseText, event.text)) {
+      this.#resumeDraft(this.turn, false);
+    }
+    if (isStopSpeech(event.text)) {
+      // A bare stop never reaches Luna or EBI; the exchange stays open.
+      await this.#abortDraft();
+      void this.#log({ type: "stop_speech", text: event.text.trim() });
+      return;
+    }
     const speechVersion = this.ownerSpeechVersion;
     if (await this.presence?.handleOwnerTurn(event.text,
       { allowBareDisconnect: this.attention.engaged })) {
@@ -286,10 +373,12 @@ export class Conversation {
     // ending/side address or reuse an old wake name after the window expires.
     const wasEngaged = this.attention.engaged;
     const maybeDirectTag = /^(?:and\s+)?[\p{L}][\p{L}'-]*\s*[,;:!?—–-]/iu.test(event.text.trim());
-    if (wasEngaged && maybeDirectTag &&
-        (this.attention.classify(event.text) === "ambient" || /^and\s+/iu.test(event.text.trim()))) {
+    if (wasEngaged && maybeDirectTag) {
+      // A new session's name must be addressable before this turn is parsed.
       await this.#refreshSessionTags();
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
+    } else if (wasEngaged) {
+      void this.#refreshSessionTags();
     }
     if (!this.attention.accept(event.text)) {
       this.ownerSpeechVersion += 1;
@@ -331,6 +420,7 @@ export class Conversation {
         this.logger.warn?.("[conversation] owner route:", error.message);
         response = "I can't reach the session list right now. Please try again.";
       }
+      void this.#refreshSessionTags();
       if (response && this.started && speechVersion === this.ownerSpeechVersion) this.#speakControl(response, event);
       return;
     }
@@ -354,8 +444,7 @@ export class Conversation {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       if (!this.started || speechVersion !== this.ownerSpeechVersion) return;
-      if (["status-one", "status-last", "session-discuss"].includes(intent.kind) &&
-          this.ownerRouter.readContext) {
+      if (STATUS_KINDS.includes(intent.kind) && this.ownerRouter.readContext) {
         let read;
         try {
           read = await this.ownerRouter.readContext(intent, { allowReference: wasEngaged });
@@ -370,6 +459,7 @@ export class Conversation {
             finalText: text, accepted: true, startedAt: this.now(), endAt: this.now(),
             sttMs: event.ms?.stt ?? null, utteranceMs: event.ms?.utterance ?? null,
             brainFirstWordAt: null, draftDone: false, draftSentences: [],
+            intent, allowReference: wasEngaged, facts: ownerFacts(text, event),
           };
           this.turn = turn;
           this.#scheduleThinking(turn);
@@ -388,8 +478,9 @@ export class Conversation {
         this.logger.warn?.("[conversation] owner route:", error.message);
         response = "I can't reach the session list right now. Please try again.";
       }
+      if (intent.kind === "create") void this.#refreshSessionTags();
       if (response && this.started && speechVersion === this.ownerSpeechVersion) {
-        if (["status-one", "status-last", "session-discuss"].includes(intent.kind)) {
+        if (STATUS_KINDS.includes(intent.kind)) {
           this.brain.injectContext?.(`Verified EBI session context: ${response}`);
         }
         this.#speakControl(response, event);
@@ -399,6 +490,7 @@ export class Conversation {
     if (this.turn && !this.turn.resumed && !this.turn.accepted) {
       this.turn.accepted = true;
       this.turn.finalText = text;
+      this.turn.facts = ownerFacts(text, event);
       this.turn.endAt = this.now();
       this.turn.utteranceMs = event.ms?.utterance ?? null;
       this.#scheduleThinking(this.turn);
@@ -406,8 +498,10 @@ export class Conversation {
     } else {
       const previous = this.turn;
       this.#cancelThinking();
+      if (previous?.resumed && !previous.interrupted) this.#resumeDraft(previous, true);
       this.turn = {
         finalText: text,
+        facts: ownerFacts(text, event),
         accepted: true,
         startedAt: this.now(),
         endAt: this.now(),
@@ -434,12 +528,16 @@ export class Conversation {
         // that does not emit firstWord events.
         turn.brainFirstWordAt ??= this.now();
         this.#clearThinkingTimer(turn);
-        turn.draftSentences.push(sentence);
+        // Jester never says a filler, and never opens a sentence with one.
+        const spoken = stripLeadingBackchannel(sentence).trim();
+        if (!spoken) continue;
+        turn.draftSentences.push(spoken);
         if (turn.accepted) this.#releaseDraft(turn);
       }
     } catch (error) {
       if (this.turn === turn && !turn.resumed) {
         turn.brainFailed = true;
+        if (error?.reason) turn.brainError = { reason: error.reason, brain: error.brain ?? null };
         this.logger.warn?.("[conversation] brain:", error.message);
       }
     } finally {
@@ -467,7 +565,7 @@ export class Conversation {
         this.reply.brainDone = true;
         if (!this.reply.activeSayId) this.#sayNext();
       } else if (turn.brainFailed && !turn.releasedCount) {
-        if (!this.#playUnavailable(turn)) this.turn = null;
+        if (!this.#brainOut(turn)) this.turn = null;
       } else {
         this.#cancelThinking(turn);
         this.turn = null;
@@ -477,6 +575,8 @@ export class Conversation {
 
   #speak(text, turn) {
     this.#cancelThinking(turn);
+    // Never orphan a reply that is still playing.
+    if (this.reply) this.#stopReply();
     const id = `reply-${++this.replyNumber}`;
     const stream = new PassThrough();
     this.reply = { id, activeSayId: id, stream, text, queue: [], brainDone: false,
@@ -494,7 +594,7 @@ export class Conversation {
 
   #speakControl(text, event) {
     const turn = {
-      accepted: true, draftDone: true, endAt: this.now(),
+      accepted: true, draftDone: true, endAt: this.now(), facts: ownerFacts(event.text, event),
       sttMs: event.ms?.stt ?? null, utteranceMs: event.ms?.utterance ?? null,
       brainFirstWordAt: this.now(),
     };
@@ -557,8 +657,10 @@ export class Conversation {
     this.reply = null;
     const heard = heardWords(done.text, this.voice.playedMs(done.id));
     if (heard) void this.transcript?.record("Jester", heard);
+    this.questionEndedAt = done.text.trim().endsWith("?") ? this.now() : null;
     void this.#log({
       type: "turn",
+      ...(done.turn.facts || { ownerText: null }),
       heardText: heard,
       timings: this.lastTimings,
       sttMs: done.turn.sttMs,
@@ -567,7 +669,7 @@ export class Conversation {
     if (this.turn === done.turn) {
       // Give Drew a full follow-up window after even a long spoken answer.
       if (!done.turn.noRefresh) this.attention.refresh();
-      if (!done.turn.brainFailed || !this.#playUnavailable(done.turn)) this.turn = null;
+      if (!done.turn.brainFailed || !this.#brainOut(done.turn)) this.turn = null;
     }
   }
 
@@ -588,16 +690,30 @@ export class Conversation {
     this.#interrupt("worker failure");
   }
 
-  #playUnavailable(turn) {
-    if (this.turn !== turn || !turn.accepted || turn.unavailablePlayed || !this.unavailableClip) return false;
-    turn.unavailablePlayed = true;
+  /** On a detected brain failure, speak the honest line (or a status sentence) once. */
+  #brainOut(turn) {
+    if (this.turn !== turn || !turn.accepted || !turn.brainError || turn.brainOutSpoken) return false;
+    turn.brainOutSpoken = true;
     this.#cancelThinking(turn);
     this.turn = null;
-    const message = "I can't reach Luna right now. My voice controls still work.";
-    const id = `unavailable-${++this.replyNumber}`;
-    this.localClipId = id;
-    this.localClipText = message;
-    this.voice.play(id, Buffer.from(this.unavailableClip));
+    const { reason, brain } = turn.brainError;
+    void this.#log({ type: "brain_error", reason, brain });
+    const speechVersion = this.ownerSpeechVersion;
+    const event = { text: turn.finalText, ms: { stt: turn.sttMs, utterance: turn.utteranceMs },
+      ...turn.facts };
+    void (async () => {
+      let line = BRAIN_OUT_LINE;
+      if (STATUS_KINDS.includes(turn.intent?.kind) && this.ownerRouter?.statusSentence) {
+        try {
+          line = await this.ownerRouter.statusSentence(turn.intent, { allowReference: turn.allowReference });
+        } catch (error) {
+          this.logger.warn?.("[conversation] status sentence:", error.message);
+        }
+      }
+      if (!line || !this.started || speechVersion !== this.ownerSpeechVersion ||
+        this.mode !== "conversation" || this.turn || this.reply) return;
+      this.#speakControl(line, event);
+    })();
     return true;
   }
 
@@ -703,6 +819,8 @@ export class Conversation {
   }
 
   traceRoute(entry) { void this.#log({ type: "ebi_action", ...entry }); }
+
+  logEvent(row) { void this.#log(row); }
 }
 
 export { heardWords, mergeText };

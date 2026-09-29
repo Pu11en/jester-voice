@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import test from "node:test";
 import { Conversation, heardWords, mergeText } from "./conversation.mjs";
 import { createVoice } from "./voice.mjs";
+import { BRAIN_OUT_LINE } from "./owner-router.mjs";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -60,7 +61,7 @@ async function withConversation(options, fn) {
   const parts = setup(options);
   const conversation = new Conversation({ ...parts, now: options.now, ownerId: "owner",
     ownerRouter: options.ownerRouter, intentProposer: options.intentProposer,
-    logFile: join(dir, "turns.jsonl") });
+    logFile: join(dir, "turns.jsonl"), ...(options.logger ? { logger: options.logger } : {}) });
   conversation.start();
   // Existing playback/timing tests exercise an already engaged exchange.
   // Attention regressions below use dormant: true and wake through worker events.
@@ -326,7 +327,7 @@ test("barge-in discards sentences that arrive after the first streamed sentence"
     await tick();
     const first = worker.sent.find((message) => message.op === "say");
     assert.equal(first.text, "First sentence.");
-    events("speech_start");
+    events("speech_sustained", { voiced_ms: 1000 });
     releaseLater();
     await tick();
     assert.equal(voice.stopped, 1);
@@ -341,7 +342,7 @@ test("barge-in stops audio, cancels Kokoro, interrupts Luna, and records only es
     await tick();
     const say = worker.sent.find((message) => message.op === "say");
     worker.emit("event", { ev: "audio_out", id: say.id, pcm: Buffer.alloc(4).toString("base64") });
-    events("speech_start");
+    events("speech_sustained", { voiced_ms: 1000 });
     await tick();
     assert.equal(voice.stopped, 1);
     assert.ok(worker.sent.some((message) => message.op === "cancel" && message.id === say.id));
@@ -385,72 +386,24 @@ test("addressed owner leave command is consumed by presence instead of sent to L
   });
 });
 
-test("brain failure waits for turn acceptance, plays the cached notice, and preserves owner leave", async () => {
-  const clip = Buffer.from([1, 2, 3, 4]);
+test("a brain failure without a reason stays silent and never plays a cached clip", async () => {
   const transcript = { rows: [], record(...row) { this.rows.push(row); } };
   let leaves = 0;
   const presence = { async handleOwnerTurn(text) { if (text === "Jester, leave") { leaves++; return true; } return false; } };
   await withConversation({
     brainAsk: async function* () { throw new Error("Codex unavailable"); },
-    presence,
-    transcript,
+    presence, transcript,
   }, async ({ events, worker, voice, conversation }) => {
-    conversation.unavailableClip = clip;
+    conversation.unavailableClip = Buffer.from([1, 2, 3, 4]);
     events("pause", { prob: 0.8, text: "Question" });
     await tick();
-    assert.equal(voice.played.length, 0, "a speculative failure does not speak before turn acceptance");
-
     events("turn_end", { text: "Question?" });
     await tick();
-    assert.equal(voice.played.length, 1);
-    assert.deepEqual(voice.played[0].stream, clip);
-    assert.equal(worker.sent.some((message) => message.op === "say"), false, "the fallback uses cached audio, not Kokoro or Luna");
-    assert.deepEqual(transcript.rows, [["owner", "Question?"]], "unplayed audio is not transcribed");
-    voice.player.emit("stateChange", { status: "playing" }, { status: "idle" });
-    assert.deepEqual(transcript.rows.at(-1), ["Jester", "I can't reach Luna right now. My voice controls still work."]);
-
+    assert.equal(voice.played.length, 0, "the pre-recorded clip path is retired");
+    assert.equal(worker.sent.some(({ op }) => op === "say"), false, "no honest line without a detected reason");
     events("turn_end", { text: "Jester, leave" });
     await tick();
     assert.equal(leaves, 1, "deterministic leave control remains available after brain failure");
-  });
-});
-
-test("owner speech interrupts the cached unavailable notice", async () => {
-  const clip = Buffer.from([1, 2, 3, 4]);
-  const transcript = { rows: [], record(...row) { this.rows.push(row); } };
-  await withConversation({ brainAsk: async function* () { throw new Error("Codex unavailable"); }, transcript }, async ({ events, voice, conversation }) => {
-    conversation.unavailableClip = clip;
-    events("turn_end", { text: "Question?" });
-    await tick();
-    assert.equal(voice.played.length, 1);
-    events("speech_start");
-    assert.equal(voice.stopped, 1);
-    assert.equal(conversation.localClipId, null);
-    assert.deepEqual(transcript.rows.at(-1), ["Jester", "I"]);
-  });
-});
-
-test("a Luna failure after its first sentence plays the cached notice after that sentence", async () => {
-  const clip = Buffer.from([1, 2, 3, 4]);
-  const transcript = { rows: [], record(...row) { this.rows.push(row); } };
-  await withConversation({
-    brainAsk: async function* () { yield "First sentence."; throw new Error("Luna dropped out"); },
-    transcript,
-  }, async ({ events, worker, voice, conversation }) => {
-    conversation.unavailableClip = clip;
-    events("turn_end", { text: "Question?" });
-    await waitUntil(() => worker.sent.some(({ op }) => op === "say"), "first sentence");
-    await waitUntil(() => conversation.reply?.brainDone, "brain failure");
-    assert.equal(voice.played.length, 1, "notice waits for spoken sentence to finish");
-    const sayId = worker.sent.find(({ op }) => op === "say").id;
-    events("say_done", { id: sayId });
-    assert.equal(conversation.reply.streamEnded, true);
-    voice.player.emit("stateChange", { status: "playing" }, { status: "idle" });
-    assert.equal(voice.played.length, 2);
-    assert.deepEqual(voice.played[1].stream, clip);
-    assert.deepEqual(transcript.rows, [["owner", "Question?"], ["Jester", "First"]]);
-    voice.player.emit("stateChange", { status: "playing" }, { status: "idle" });
-    assert.deepEqual(transcript.rows.at(-1), ["Jester", "I can't reach Luna right now. My voice controls still work."]);
   });
 });
 
@@ -460,7 +413,7 @@ test("room transcript captures guest turns and only the heard part of Jester rep
     worker.emit("event", { ev: "turn_end", speaker: "guest", text: "A guest question." });
     events("turn_end", { text: "Jester, Owner question?" });
     await tick();
-    events("speech_start");
+    events("speech_sustained", { voiced_ms: 1000 });
     await tick();
     assert.deepEqual(transcript.rows, [
       ["Guest Name", "A guest question."],
@@ -577,13 +530,13 @@ test("words received during speculation suppress the cue after acceptance", asyn
   });
 });
 
-test("speech starting immediately after turn_end prevents its pending cue and brain request", async (t) => {
+test("sustained speech immediately after turn_end prevents its pending cue and brain request", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const slow = slowBrain();
   await withConversation({ brainAsk: slow.ask, now: () => Date.now() }, async ({ events, brain, voice, conversation }) => {
     conversation.stallClip = Buffer.from([1, 2]);
     events("turn_end", { text: "Interrupted question?" });
-    events("speech_start");
+    events("speech_sustained", { voiced_ms: 1000 });
     await flush();
     t.mock.timers.tick(5000);
     assert.equal(voice.played.length, 0);
@@ -593,7 +546,7 @@ test("speech starting immediately after turn_end prevents its pending cue and br
   });
 });
 
-for (const action of ["speech_start", "disconnect", "fatal", "close"]) {
+for (const action of ["speech_sustained", "disconnect", "fatal", "close"]) {
   for (const cueStarted of [false, true]) {
     test(`${action} cancels ${cueStarted ? "playing" : "pending"} thinking cue and ignores late output`, async (t) => {
       t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
@@ -603,7 +556,7 @@ for (const action of ["speech_start", "disconnect", "fatal", "close"]) {
         events("turn_end", { text: "Question?" });
         await flush();
         t.mock.timers.tick(cueStarted ? 2500 : 2499);
-        if (action === "speech_start") events("speech_start");
+        if (action === "speech_sustained") events("speech_sustained", { voiced_ms: 1000 });
         else if (action === "disconnect") voice.emit("disconnect");
         else if (action === "fatal") worker.emit("fatal", new Error("offline test failure"));
         else await conversation.close();
@@ -993,5 +946,321 @@ test("a stalled player drops the reply once 8 MB of speech is pending", async ()
     assert.ok(written <= 8, `at most 8 MB reached the player (${written} MB)`);
     assert.ok(voice.stopped >= 1);
     assert.ok(brain.interrupts >= 1);
+  });
+});
+
+// ---- J1: no cut-out on noises, model-free answers, honest brain-out line, fresh tags ----
+
+async function logRows(conversation, logPath) {
+  await conversation.logQueue;
+  try { return (await readFile(logPath, "utf8")).trim().split("\n").filter(Boolean).map(JSON.parse); }
+  catch { return []; }
+}
+
+function heldBrain(first = "First sentence.", later = "Later sentence.") {
+  let release;
+  const ready = new Promise((resolve) => { release = resolve; });
+  return {
+    release,
+    async *ask(text) { this.asks.push(text); yield first; await ready; yield later; },
+  };
+}
+
+test("a short owner speech_start no longer stops a playing reply or interrupts Luna", async () => {
+  await withConversation({ answers: ["One two three."] }, async ({ events, worker, voice, brain, conversation }) => {
+    events("turn_end", { text: "Question?" });
+    await tick();
+    assert.ok(conversation.reply);
+    events("speech_start");
+    await tick();
+    assert.equal(voice.stopped, 0);
+    assert.equal(brain.interrupts, 0);
+    assert.ok(conversation.reply, "the reply keeps playing");
+    assert.equal(worker.sent.some(({ op }) => op === "cancel"), false);
+  });
+});
+
+test("sustained owner speech stops the reply and interrupts Luna", async () => {
+  await withConversation({ answers: ["One two three."] }, async ({ events, worker, voice, brain, conversation }) => {
+    events("turn_end", { text: "Question?" });
+    await tick();
+    const say = worker.sent.find(({ op }) => op === "say");
+    events("speech_start");
+    events("speech_sustained", { voiced_ms: 1000 });
+    await tick();
+    assert.equal(voice.stopped, 1);
+    assert.equal(brain.interrupts, 1);
+    assert.ok(worker.sent.some(({ op, id }) => op === "cancel" && id === say.id));
+    assert.equal(conversation.reply, null);
+  });
+});
+
+test("a backchannel while Jester talks is neither a stop nor a turn nor a transcript line", async () => {
+  const transcript = { rows: [], record(...row) { this.rows.push(row); } };
+  await withConversation({ answers: ["One two three."], transcript }, async ({ events, worker, voice, brain, conversation, logPath }) => {
+    events("turn_end", { text: "Question?" });
+    await tick();
+    events("speech_start");
+    events("pause", { prob: 0.9, text: "Mm-hmm." });
+    events("turn_end", { text: "Mm-hmm.", voiced_ms: 300 });
+    await tick();
+    assert.equal(voice.stopped, 0);
+    assert.equal(worker.sent.some(({ op }) => op === "cancel"), false);
+    assert.deepEqual(brain.asks, ["Question?"]);
+    assert.deepEqual(brain.context, []);
+    assert.equal(brain.interrupts, 0);
+    assert.ok(conversation.reply, "the reply keeps playing");
+    assert.ok(!transcript.rows.some(([, text]) => /mm-hmm/i.test(text)));
+    const rows = await logRows(conversation, logPath);
+    assert.ok(rows.some(row => row.type === "backchannel_ignored" && row.text === "Mm-hmm."));
+  });
+});
+
+test("an idle backchannel starts no draft and reaches no brain", async () => {
+  await withConversation({}, async ({ events, worker, brain }) => {
+    for (const text of ["Mm-hmm.", "Uh-huh.", "Hmm.", "Yeah.", "Okay."]) {
+      events("pause", { prob: 0.9, text });
+      events("turn_end", { text });
+      await tick();
+    }
+    assert.deepEqual(brain.asks, []);
+    assert.equal(brain.interrupts, 0);
+    assert.equal(worker.sent.some(({ op }) => op === "say"), false);
+  });
+});
+
+test("an accepted turn awaiting Luna survives a hum and its sentences play", async () => {
+  const slow = slowBrain();
+  await withConversation({ brainAsk: slow.ask }, async ({ events, worker, brain }) => {
+    events("turn_end", { text: "Question?" });
+    await flush();
+    events("speech_start");
+    events("pause", { prob: 0.9, text: "Hmm." });
+    events("turn_end", { text: "Hmm." });
+    await flush();
+    slow.finish();
+    await waitUntil(() => worker.sent.some(({ op }) => op === "say"), "reply");
+    assert.equal(brain.interrupts, 0);
+    assert.equal(worker.sent.find(({ op }) => op === "say").text, "The answer.");
+  });
+});
+
+test("a stop phrase at the pause stops the reply and Luna at once and asks nothing", async () => {
+  const held = heldBrain();
+  await withConversation({ brainAsk: held.ask }, async ({ events, worker, voice, brain, conversation }) => {
+    events("turn_end", { text: "Tell me a story" });
+    await tick();
+    const say = worker.sent.find(({ op }) => op === "say");
+    events("speech_start");
+    events("pause", { prob: 0.9, text: "Jester, stop." });
+    assert.equal(voice.stopped, 1, "stopped in the same event");
+    assert.ok(worker.sent.some(({ op, id }) => op === "cancel" && id === say.id));
+    assert.equal(brain.interrupts, 1);
+    events("turn_end", { text: "Jester, stop." });
+    held.release();
+    await tick();
+    assert.deepEqual(brain.asks, ["Tell me a story"]);
+    assert.equal(conversation.attention.engaged, true);
+    assert.deepEqual(worker.sent.filter(({ op }) => op === "say").map(({ text }) => text), ["First sentence."]);
+  });
+});
+
+test("a stop phrase with nothing playing is ignored", async () => {
+  await withConversation({}, async ({ events, voice, brain, conversation }) => {
+    events("pause", { prob: 0.9, text: "Stop." });
+    events("turn_end", { text: "Stop." });
+    await tick();
+    assert.equal(voice.stopped, 0);
+    assert.deepEqual(brain.asks, []);
+    assert.equal(conversation.attention.engaged, true);
+  });
+});
+
+test("real words while a reply plays stop it and interrupt Luna before the new turn", async () => {
+  const order = [];
+  const held = heldBrain();
+  await withConversation({ brainAsk: async function* (text) {
+    order.push(`ask:${text}`);
+    yield* held.ask.call(this, text);
+  } }, async ({ events, worker, voice, brain }) => {
+    brain.interrupt = async () => { brain.interrupts += 1; order.push("interrupt"); };
+    events("turn_end", { text: "Is podlox open?" });
+    await tick();
+    const say = worker.sent.find(({ op }) => op === "say");
+    events("turn_end", { text: "No, pod locks." });
+    await tick();
+    assert.equal(voice.stopped, 1);
+    assert.ok(worker.sent.some(({ op, id }) => op === "cancel" && id === say.id));
+    assert.deepEqual(order, ["ask:Is podlox open?", "interrupt", "ask:No, pod locks."]);
+    held.release();
+  });
+});
+
+test("a bare yes right after Jester asked a question is an answer", async () => {
+  await withConversation({ answers: ["Shall I check it?", "Checking."] }, async ({ events, worker, voice, brain }) => {
+    events("turn_end", { text: "Is podlox done?" });
+    await tick();
+    events("say_done", { id: worker.sent.find(({ op }) => op === "say").id });
+    voice.player.emit("stateChange", { status: "playing" }, { status: "idle" });
+    events("turn_end", { text: "Yeah." });
+    await tick();
+    assert.deepEqual(brain.asks, ["Is podlox done?", "Yeah."]);
+  });
+});
+
+test("prefix uses of yeah are ordinary turns", async () => {
+  await withConversation({ brainAsk: async function* (text) { this.asks.push(text); } }, async ({ events, brain }) => {
+    events("turn_end", { text: "Yeah, so I need you to check Zoro" });
+    await tick();
+    events("turn_end", { text: "Uh yeah, open a thread in the jobs folder" });
+    await tick();
+    assert.deepEqual(brain.asks, ["Yeah, so I need you to check Zoro",
+      "Uh yeah, open a thread in the jobs folder"]);
+  });
+});
+
+test("list, see, why-no-tag and find questions are answered by the router without Luna", async () => {
+  const handled = [];
+  const ownerRouter = { reset() {}, sessionTags: async () => [],
+    handle: async (text, options) => { handled.push(options.intent.kind); return `Answer for ${text}`; } };
+  await withConversation({ ownerRouter }, async ({ events, worker, brain }) => {
+    const texts = ["what's open?", "do you see pod locks?", "how come there's no tag on podlox?",
+      "find the login work"];
+    for (const [index, text] of texts.entries()) {
+      events("turn_end", { text });
+      await waitUntil(() => worker.sent.filter(({ op }) => op === "say").length === index + 1, text);
+    }
+    assert.deepEqual(handled, ["list-open", "see-one", "why-no-tag", "history"]);
+    assert.deepEqual(brain.asks, []);
+    assert.equal(worker.sent.filter(({ op }) => op === "say")[0].text, "Answer for what's open?");
+  });
+});
+
+test("a brain failure with a reason speaks the honest line once and logs it", async () => {
+  const error = Object.assign(new Error("usage limit"), { reason: "usageLimitExceeded", brain: "codex" });
+  await withConversation({ brainAsk: async function* () { throw error; } }, async ({ events, worker, voice, conversation, logPath }) => {
+    conversation.unavailableClip = Buffer.from([1, 2, 3, 4]);
+    events("turn_end", { text: "Question?" });
+    await waitUntil(() => worker.sent.some(({ op }) => op === "say"), "honest line");
+    await tick();
+    assert.deepEqual(worker.sent.filter(({ op }) => op === "say").map(({ text }) => text), [BRAIN_OUT_LINE]);
+    assert.ok(voice.played.every(({ stream }) => !Buffer.isBuffer(stream)), "no cached clip");
+    const rows = await logRows(conversation, logPath);
+    assert.ok(rows.some(row => row.type === "brain_error" && row.reason === "usageLimitExceeded" &&
+      row.brain === "codex"));
+  });
+});
+
+test("a brain failure after the first sentence speaks the honest line after it", async () => {
+  const error = Object.assign(new Error("dropped"), { reason: "unreachable" });
+  await withConversation({ brainAsk: async function* () { yield "First sentence."; throw error; } },
+    async ({ events, worker, voice, conversation }) => {
+      events("turn_end", { text: "Question?" });
+      await waitUntil(() => conversation.reply?.brainDone, "brain failure");
+      events("say_done", { id: worker.sent.find(({ op }) => op === "say").id });
+      voice.player.emit("stateChange", { status: "playing" }, { status: "idle" });
+      assert.deepEqual(worker.sent.filter(({ op }) => op === "say").map(({ text }) => text),
+        ["First sentence.", BRAIN_OUT_LINE]);
+    });
+});
+
+test("a status question with the brain down speaks the router's status sentence", async () => {
+  const calls = [];
+  const ownerRouter = { reset() {}, sessionTags: async () => ["nami"],
+    readContext: async () => ({ kind: "context", text: "Nami transcript" }),
+    statusSentence: async (intent, options) => { calls.push([intent.kind, options]); return "Nami is running tests."; },
+    handle: async () => "wrong path" };
+  const error = Object.assign(new Error("quota"), { reason: "usageLimitExceeded", brain: "claude" });
+  await withConversation({ ownerRouter, brainAsk: async function* () { throw error; } }, async ({ events, worker }) => {
+    events("turn_end", { text: "Jester, what is Nami doing?" });
+    await waitUntil(() => worker.sent.some(({ op }) => op === "say"), "status sentence");
+    await tick();
+    assert.deepEqual(worker.sent.filter(({ op }) => op === "say").map(({ text }) => text), ["Nami is running tests."]);
+    assert.deepEqual(calls, [["status-one", { allowReference: true }]]);
+  });
+});
+
+test("session tags refresh on engaged turns so a new session is addressable without restart", async () => {
+  let tags = [];
+  let calls = 0;
+  const handled = [];
+  const ownerRouter = { reset() {}, sessionTags: async () => { calls += 1; return tags; },
+    handle: async (_text, options) => { handled.push(options.intent); return "Posted."; } };
+  await withConversation({ ownerRouter, brainAsk: async function* (text) { this.asks.push(text); } },
+    async ({ events, brain }) => {
+      await tick();
+      const atStart = calls;
+      events("turn_end", { text: "tell me a joke" });
+      await waitUntil(() => brain.asks.length === 1, "plain turn");
+      assert.ok(calls > atStart, "a plain engaged turn refreshes tags");
+      tags = ["zoro"];
+      events("turn_end", { text: "Zoro, check the tests" });
+      await waitUntil(() => handled.length === 1, "message route");
+      assert.equal(handled[0].kind, "message");
+      assert.equal(handled[0].target, "Zoro");
+    });
+});
+
+test("a voice create refreshes session tags afterwards", async () => {
+  let calls = 0;
+  const ownerRouter = { reset() {}, sessionTags: async () => { calls += 1; return []; },
+    handle: async () => "Created podlox." };
+  await withConversation({ ownerRouter }, async ({ events, worker }) => {
+    events("turn_end", { text: "Jester, open a new session in podlox to fix the build" });
+    await waitUntil(() => worker.sent.some(({ op }) => op === "say"), "create receipt");
+    await tick();
+    // One call at start, one for the engaged turn, and one after the create.
+    assert.ok(calls >= 3, `tags refreshed after create (${calls})`);
+  });
+});
+
+test("a failing snapshot warns and keeps the previous tags", async () => {
+  let fail = false;
+  const warnings = [];
+  const ownerRouter = { reset() {}, handle: async () => "ok",
+    sessionTags: async () => { if (fail) throw new Error("EBI down"); return ["zoro"]; } };
+  const logger = { warn: (...args) => warnings.push(args.join(" ")) };
+  await withConversation({ ownerRouter, logger, brainAsk: async function* (text) { this.asks.push(text); } },
+    async ({ events, conversation, brain }) => {
+      await tick();
+      assert.ok(conversation.attention.sessionTags.has("zoro"));
+      fail = true;
+      events("turn_end", { text: "tell me a joke" });
+      await waitUntil(() => brain.asks.length === 1, "turn");
+      await tick();
+      assert.ok(warnings.some(text => /EBI down/.test(text)));
+      assert.ok(conversation.attention.sessionTags.has("zoro"));
+    });
+});
+
+test("Jester never speaks a filler sentence", async () => {
+  await withConversation({ brainAsk: async function* () { yield "Mm-hmm."; yield "I'm here."; } },
+    async ({ events, worker }) => {
+      events("turn_end", { text: "Are you there?" });
+      await waitUntil(() => worker.sent.some(({ op }) => op === "say"), "reply");
+      assert.equal(worker.sent.find(({ op }) => op === "say").text, "I'm here.");
+    });
+});
+
+test("turn rows record the owner's words and speech metrics", async () => {
+  await withConversation({ answers: ["A reply."] }, async ({ events, worker, voice, conversation, logPath }) => {
+    events("turn_end", { text: "Question?", voiced_ms: 820, vad_mean: 0.71, stt_logprob: -0.2 });
+    await tick();
+    events("say_done", { id: worker.sent.find(({ op }) => op === "say").id });
+    voice.player.emit("stateChange", { status: "playing" }, { status: "idle" });
+    const row = (await logRows(conversation, logPath)).find(({ type }) => type === "turn");
+    assert.equal(row.ownerText, "Question?");
+    assert.equal(row.voiced_ms, 820);
+    assert.equal(row.vad_mean, 0.71);
+    assert.equal(row.stt_logprob, -0.2);
+  });
+});
+
+test("logEvent writes a row with its own type to the turn log", async () => {
+  await withConversation({}, async ({ conversation, logPath }) => {
+    conversation.logEvent({ type: "brainSwitched", from: "codex", to: "claude", reason: "usageLimitExceeded" });
+    const rows = await logRows(conversation, logPath);
+    assert.deepEqual(rows.filter(row => row.type === "brainSwitched").map(({ from, to, reason }) => ({ from, to, reason })),
+      [{ from: "codex", to: "claude", reason: "usageLimitExceeded" }]);
   });
 });
