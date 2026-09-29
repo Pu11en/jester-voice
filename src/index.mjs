@@ -16,22 +16,28 @@ import { OwnerRouter } from "./owner-router.mjs";
 import { EventWatcher } from "./event-watcher.mjs";
 import { Dependencies } from "./dependencies.mjs";
 import { ActionJournal } from "./action-journal.mjs";
-import { IntentProposer } from "./intent-proposer.mjs";
+import { IntentProposer, PROPOSER_INSTRUCTIONS } from "./intent-proposer.mjs";
 import { childEnv } from "./child-env.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Codex first; Claude answers while Codex is out, unless JESTER_BRAIN_FALLBACK=none. */
-export function buildBrain(config = {}, { logger = console } = {}) {
-  const codex = new Brain({});
+export function buildBrain(config = {}, { logger = console, instructions } = {}) {
+  const codex = new Brain(instructions ? { baseInstructions: instructions, effort: "low" } : {});
   if (config.brainFallback === "none") return codex;
   return new FallbackBrain({
     primary: codex,
     secondary: new ClaudeBrain({ command: config.claudeBin || "claude",
-      ...(config.claudeModel ? { model: config.claudeModel } : {}) }),
+      ...(config.claudeModel ? { model: config.claudeModel } : {}),
+      ...(instructions ? { systemPrompt: instructions } : {}) }),
     retryAfterMs: (config.brainRetryMinutes || 10) * 60_000,
     logger,
   });
+}
+
+/** The intent proposer's own brain chain, so it never shares turn state with the conversation. */
+export function buildProposerBrain(config = {}, { logger = console } = {}) {
+  return buildBrain(config, { logger, instructions: PROPOSER_INSTRUCTIONS });
 }
 
 export async function startApp({ config, createVoiceImpl = createVoice,
@@ -43,7 +49,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   createEventWatcherImpl = (options) => new EventWatcher(options),
   createDependenciesImpl = (options) => new Dependencies(options),
   createActionJournalImpl = (options) => new ActionJournal(options),
-  createIntentProposerImpl = (options) => new IntentProposer(options),
+  createIntentProposerImpl = ({ config }) => new IntentProposer({ brain: buildProposerBrain(config) }),
 } = {}) {
   config ||= await loadConfig();
   const stallClip = await readFile(resolve(projectRoot, "assets/thinking.pcm"));
@@ -60,7 +66,7 @@ export async function startApp({ config, createVoiceImpl = createVoice,
   const ebiClient = new EbiClient({ baseUrl: config.ebiApiUrl, secret: config.ebiApiSecret });
   const dependencies = createDependenciesImpl({ client: ebiClient, ownerId: config.ownerId });
   const actionJournal = createActionJournalImpl();
-  const intentProposer = createIntentProposerImpl();
+  const intentProposer = createIntentProposerImpl({ config });
   const ownerRouter = new OwnerRouter({
     client: ebiClient,
     ownerId: config.ownerId,

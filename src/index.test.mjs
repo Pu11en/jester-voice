@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { buildBrain, startApp } from "./index.mjs";
+import { buildBrain, buildProposerBrain, startApp } from "./index.mjs";
+import { PROPOSER_INSTRUCTIONS } from "./intent-proposer.mjs";
 import { Brain } from "./brain.mjs";
 import { ClaudeBrain } from "./claude-brain.mjs";
 import { FallbackBrain } from "./brain-fallback.mjs";
@@ -69,6 +70,28 @@ test("buildBrain chains Codex then Claude by default and a plain Codex brain whe
   const plain = buildBrain({ ...config, brainFallback: "none" });
   assert.ok(plain instanceof Brain);
   await Promise.all([chained.close(), plain.close()]);
+});
+
+test("the intent proposer gets its own Codex-then-Claude brain, or plain Codex when disabled", async () => {
+  const config = { brainFallback: "claude", claudeBin: "/fake/claude", claudeModel: "claude-test",
+    brainRetryMinutes: 4 };
+  const conversation = buildBrain(config, { logger: {} });
+  const chained = buildProposerBrain(config, { logger: {} });
+  assert.ok(chained instanceof FallbackBrain);
+  assert.ok(chained.primary instanceof Brain);
+  assert.ok(chained.secondary instanceof ClaudeBrain);
+  assert.notEqual(chained.primary, conversation.primary, "never shares turn state");
+  assert.notEqual(chained.secondary, conversation.secondary, "never shares turn state");
+  assert.equal(chained.primary.baseInstructions, PROPOSER_INSTRUCTIONS);
+  assert.equal(chained.primary.effort, "low");
+  assert.equal(chained.secondary.systemPrompt, PROPOSER_INSTRUCTIONS);
+  assert.equal(chained.secondary.command, "/fake/claude");
+  assert.equal(chained.secondary.model, "claude-test");
+  assert.equal(chained.retryAfterMs, 4 * 60_000);
+  const plain = buildProposerBrain({ ...config, brainFallback: "none" });
+  assert.ok(plain instanceof Brain);
+  assert.equal(plain.baseInstructions, PROPOSER_INSTRUCTIONS);
+  await Promise.all([conversation.close(), chained.close(), plain.close()]);
 });
 
 test("a brainSwitched event is written as one row to the turn log", async () => {
