@@ -19,6 +19,8 @@ export class EbiClient {
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
     this.pendingSnapshot = null;
+    // Snapshot totals EBI is adding (open_count, discord_active_threads); null until it sends them.
+    this.lastSnapshotMeta = { openCount: null, discordActiveThreads: null };
   }
 
   async #request(path, options = {}) {
@@ -41,6 +43,10 @@ export class EbiClient {
     this.pendingSnapshot = (async () => {
       const body = await this.#request("/api/jester/sessions?limit=100");
       if (!Array.isArray(body.sessions)) throw new Error("EBI session snapshot is invalid");
+      this.lastSnapshotMeta = {
+        openCount: Number.isInteger(body.open_count) ? body.open_count : null,
+        discordActiveThreads: Number.isInteger(body.discord_active_threads) ? body.discord_active_threads : null,
+      };
       const ids = new Set();
       return body.sessions.map((raw) => {
         // JSON numbers lose bits from Discord snowflakes. Never guess a target.
@@ -56,7 +62,10 @@ export class EbiClient {
           project: String(raw.project || ""),
           currentTask: String(raw.current_task || ""),
           state: String(raw.state || "history"),
+          // Open unless EBI says closed: the coming snapshot omits closed rows and the field.
           closed: raw.closed === true,
+          // Whether Discord still shows the thread; null while EBI does not send it.
+          visible: typeof raw.visible === "boolean" ? raw.visible : null,
         };
       });
     })();

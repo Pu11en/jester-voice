@@ -355,3 +355,110 @@ test("an on-demand update names each running session with its state and task", a
   assert.match(reply, /nami \(queued\): task unavailable/);
   assert.doesNotMatch(reply, /zoro/, "history sessions are not reported as work in progress");
 });
+
+const podlox = { threadId: "1554200000000000001", tag: "zoro", aliases: [], name: "podlox",
+  project: "/home/drewp/main-projects/podlox", state: "recovering", currentTask: "", closed: false };
+const taskLoop = { threadId: "1554200000000000002", tag: "", aliases: [], name: "Task loop",
+  project: "/home/drewp/main-projects/task-loop", state: "history", currentTask: "", closed: false };
+const oldAudit = { threadId: "1554200000000000003", tag: "", aliases: [], name: "Old audit",
+  project: "/home/drewp/main-projects/old-audit", state: "history", currentTask: "", closed: true };
+// Today's EBI rows always carry closed; a missing field must still count as open.
+const nameless = Array.from({ length: 22 }, (_, i) => ({ threadId: String(1554200000000000100n + BigInt(i)),
+  tag: "", aliases: [], name: "", project: "", state: "history", currentTask: "" }));
+
+function snapshotOnly() {
+  const state = setup();
+  state.client.searchSessions = async () => { throw new Error("the thread search must not be needed"); };
+  state.client.threadMessages = async () => { throw new Error("thread messages must not be needed"); };
+  state.client.resolveTag = async () => { throw new Error("tag resolution must not be needed"); };
+  return state;
+}
+
+test("lists every open session by name with its tag and state, without any brain", async () => {
+  const { router, calls, setRows } = snapshotOnly();
+  setRows([podlox, taskLoop, ...nameless, oldAudit]);
+  const reply = await router.handle("What threads do we have open?", { speakerId: ownerId });
+  assert.equal(reply, "24 open sessions: podlox (tag zoro, recovering); Task loop (no tag, idle); and 22 more without names.");
+  assert.doesNotMatch(reply, /Old audit/, "closed rows are not open");
+  assert.equal(calls.length, 0);
+  setRows([oldAudit]);
+  assert.equal(await router.handle("What's open?", { speakerId: ownerId }), "No sessions are open right now.");
+  setRows([{ ...podlox, visible: false }, { ...taskLoop, visible: true }]);
+  assert.match(await router.handle("Like what sessions that are actually open?", { speakerId: ownerId }),
+    /^2 open sessions: podlox \(tag zoro, recovering\); Task loop \(no tag, idle\)\. 1 of them isn't visible in Discord\.$/);
+});
+
+test("see-one answers yes or no from open rows with a clear fuzzy match", async () => {
+  const { router, calls, setRows } = snapshotOnly();
+  setRows([podlox, taskLoop, oldAudit]);
+  assert.equal(await router.handle("Jester, do you see pod locks?", { speakerId: ownerId }),
+    "Yes, podlox is open. Tag zoro, recovering.");
+  assert.equal(await router.handle("Yo, Jester, do you see pod logs?", { speakerId: ownerId }),
+    "Yes, podlox is open. Tag zoro, recovering.");
+  assert.equal(await router.handle("Is podlocks open?", { speakerId: ownerId }),
+    "Yes, podlox is open. Tag zoro, recovering.");
+  assert.equal(await router.handle("Do you have Zoro?", { speakerId: ownerId }),
+    "Yes, podlox is open. Tag zoro, recovering.");
+  assert.equal(await router.handle("Is the task loop thread open?", { speakerId: ownerId }),
+    "Yes, Task loop is open. No tag, idle.");
+  assert.equal(await router.handle("Do you see old audit?", { speakerId: ownerId }), "No, Old audit is closed.");
+  assert.equal(await router.handle("Do you have Nami?", { speakerId: ownerId }),
+    "No, I don't see an open session called Nami.");
+  assert.equal(await router.handle("Tell it to check the tests", { speakerId: ownerId, allowReference: true }),
+    "I posted your task to Task loop.", "the last yes answer binds its session for follow-ups");
+  assert.equal(calls.at(-1).threadId, taskLoop.threadId);
+});
+
+test("why-no-tag counts the word holders and the untagged sessions from the snapshot", async () => {
+  const { router, setRows } = snapshotOnly();
+  setRows([podlox, taskLoop, ...nameless, oldAudit]);
+  const reply = await router.handle(
+    "Yeah, so I need you to, you know, how come there's nothing, like no tag on one of the sessions?",
+    { speakerId: ownerId });
+  assert.match(reply, /^1 of 10 voice words is held: zoro for podlox\. 9 words are free, so EBI did not run out of tags\./);
+  assert.match(reply, /23 open sessions have no tag, including Task loop\./);
+  const crew = ["luffy", "zoro", "nami", "sanji", "chopper", "franky", "jinbe", "usopp", "shanks", "mihawk"];
+  setRows([...crew.map((tag, i) => ({ threadId: String(1554200000000000200n + BigInt(i)), tag, aliases: [],
+    name: `Job ${i + 1}`, project: "", state: "running", currentTask: "", closed: false })), taskLoop]);
+  const full = await router.handle("Why is there no tag on Task loop?", { speakerId: ownerId });
+  assert.match(full, /^Task loop has no tag\. All 10 voice words are held: luffy for Job 1, zoro for Job 2, .* and 4 more\./);
+  assert.match(full, /1 open session has no tag: Task loop\. Closing a session frees its word\.$/);
+  assert.equal(await router.handle("Why does Job 3 have no tag?", { speakerId: ownerId }),
+    "Job 3 does have a tag: nami.");
+});
+
+test("a bare find searches open rows by name or project before any thread search", async () => {
+  const { router, client, calls, setRows } = snapshotOnly();
+  setRows([podlox, taskLoop, oldAudit]);
+  assert.equal(await router.handle("Find podlox", { speakerId: ownerId }), "I found podlox. Tag zoro, recovering.");
+  assert.equal(await router.handle("Jester, search for pod locks", { speakerId: ownerId }),
+    "I found podlox. Tag zoro, recovering.");
+  assert.equal(await router.handle("Look up the task loop thread", { speakerId: ownerId }),
+    "I found Task loop. No tag, idle.");
+  assert.equal(calls.length, 0);
+  const searched = [];
+  client.searchSessions = async query => { searched.push(query); return [{ threadId: oldAudit.threadId,
+    name: "Old audit", link: `https://discord.com/channels/1546639912848199742/${oldAudit.threadId}` }]; };
+  assert.equal(await router.handle("Find old audit", { speakerId: ownerId }),
+    "I couldn't find an open session about old audit.", "closed threads are deferred");
+  assert.deepEqual(searched, ["old audit"]);
+});
+
+test("statusSentence speaks the deterministic status line without a brain", async () => {
+  const { router } = setup();
+  assert.equal(await router.statusSentence({ kind: "status-one", target: "Frankie" }),
+    "franky is running. Task: Checking login");
+  assert.equal(await router.statusSentence({ kind: "status-last", target: "it" }, { allowReference: true }),
+    "franky is running. Task: Checking login", "the status line binds the session for follow-ups");
+  assert.match(await router.statusSentence({ kind: "session-discuss", target: "Nami" }), /can't find an open session named Nami/);
+});
+
+test("a detected brain outage gets the honest Luna line while a misparse asks again", async () => {
+  const { router } = setup();
+  assert.equal(await router.handle("start something in podlox", { speakerId: ownerId,
+    intent: { kind: "clarify", reason: "proposal-unavailable" } }),
+  "Luna is out until October 4. I can still list, find, send, stop and close sessions.");
+  assert.equal(await router.handle("start something in podlox", { speakerId: ownerId,
+    intent: { kind: "clarify", reason: "proposal-invalid" } }),
+  "Please say the final task once more so I send the right words.");
+});

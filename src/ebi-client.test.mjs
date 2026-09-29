@@ -124,3 +124,18 @@ test("reads bounded thread replies through the exact ID without trusting numeric
   assert.match(seen[0], /\/api\/threads\/1554145503506333736\/messages\?limit=20$/);
   await assert.rejects(client.threadMessages("1554145503506333700", 101), /Invalid thread message request/);
 });
+
+test("snapshot accepts the coming visibility fields and today's shape alike", async () => {
+  let body = { sessions: [session("1553899450227757156", "franky")] };
+  const client = new EbiClient({ fetchImpl: async () => ({ ok: true, json: async () => body }) });
+  let rows = await client.snapshot();
+  assert.equal(rows[0].closed, false, "a missing closed field is an open row");
+  assert.equal(rows[0].visible, null);
+  assert.deepEqual(client.lastSnapshotMeta, { openCount: null, discordActiveThreads: null });
+  body = { sessions: [session("1553899450227757156", "franky", { visible: false, closed: false }),
+    session("1553779983158349925", "zoro", { visible: true })], open_count: 24, discord_active_threads: 2 };
+  rows = await client.snapshot();
+  assert.deepEqual(rows.map(row => row.visible), [false, true]);
+  assert.deepEqual(client.lastSnapshotMeta, { openCount: 24, discordActiveThreads: 2 });
+  assert.equal((await client.resolveTag("franky")).kind, "found", "visibility never hides a target");
+});

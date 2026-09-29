@@ -3,7 +3,88 @@ import { SessionReader } from "./session-reader.mjs";
 
 const PRONOUNS = new Set(["him", "her", "them", "it", "that one", "that session"]);
 const BIND_MS = 60_000;
+/** EBI's spoken tag vocabulary size (claude_discord/voice_labels.py SPOKEN_LABELS). */
+const TAG_WORDS = 10;
+const LIST_MAX = 10;
+const MATCH_MIN = 0.85;
+const NEAR_TIE = 0.03;
+/** Spoken only for a detected brain failure with a reason, never for a misparse. */
+export const BRAIN_OUT_LINE = "Luna is out until October 4. I can still list, find, send, stop and close sessions.";
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isOpen = row => row.closed !== true;
+const folder = project => String(project || "").split("/").filter(Boolean).at(-1) || "";
+const displayName = row => String(row.name || "").trim() || folder(row.project);
+const spokenState = state => (!state || state === "history") ? "idle" : String(state);
+const compact = value => String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+const tagPhrase = (row, capital = false) => row.tag ? `${capital ? "Tag" : "tag"} ${row.tag}` : `${capital ? "No" : "no"} tag`;
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function jaroWinkler(a, b) {
+  if (a === b) return 1;
+  const window = Math.max(0, Math.floor(Math.max(a.length, b.length) / 2) - 1);
+  const matchedA = new Array(a.length).fill(false);
+  const matchedB = new Array(b.length).fill(false);
+  let matches = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    for (let j = Math.max(0, i - window); j < Math.min(b.length, i + window + 1); j += 1) {
+      if (matchedB[j] || a[i] !== b[j]) continue;
+      matchedA[i] = matchedB[j] = true;
+      matches += 1;
+      break;
+    }
+  }
+  if (!matches) return 0;
+  let transpositions = 0;
+  let k = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    if (!matchedA[i]) continue;
+    while (!matchedB[k]) k += 1;
+    if (a[i] !== b[k]) transpositions += 1;
+    k += 1;
+  }
+  const jaro = (matches / a.length + matches / b.length + (matches - transpositions / 2) / matches) / 3;
+  let prefix = 0;
+  while (prefix < Math.min(4, a.length, b.length) && a[prefix] === b[prefix]) prefix += 1;
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+function similarity(query, candidate) {
+  if (!query || !candidate) return 0;
+  if (query === candidate) return 1;
+  if (Math.min(query.length, candidate.length) < 4) return 0;
+  if (candidate.includes(query) || query.includes(candidate)) return 0.92;
+  return jaroWinkler(query, candidate);
+}
+
+/** Best similarity of a spoken name against a row's tag, aliases, thread name and project folder. */
+function rowScore(row, query) {
+  const names = [row.tag, ...(row.aliases || []), row.name, folder(row.project)].map(compact).filter(Boolean);
+  return Math.max(0, ...names.map(name => similarity(query, name)));
+}
+
+/** Resolve a spoken name to one clear best row; a near tie is ambiguous, never a guess. */
+export function matchSession(rows, spoken) {
+  const query = compact(spoken);
+  if (!query) return { kind: "unknown", closest: null };
+  const scored = rows.map(row => ({ row, score: rowScore(row, query) }))
+    .filter(item => item.score > 0).sort((a, b) => b.score - a.score);
+  if (!scored.length) return { kind: "unknown", closest: null };
+  const [best, second] = scored;
+  if (best.score < MATCH_MIN) return { kind: "unknown", closest: best.score >= 0.7 ? best.row : null };
+  if (second && second.score >= best.score - NEAR_TIE) {
+    return { kind: "ambiguous", matches: scored.filter(item => item.score >= best.score - NEAR_TIE).map(item => item.row) };
+  }
+  return { kind: "found", session: best.row };
+}
+
+/** Every open row whose tag, alias, name or project folder matches the spoken words. */
+export function searchRows(rows, spoken) {
+  const query = compact(spoken);
+  if (!query) return [];
+  return rows.map(row => ({ row, score: rowScore(row, query) })).filter(item => item.score >= MATCH_MIN)
+    .sort((a, b) => b.score - a.score).map(item => item.row);
+}
 
 function runtimeChoice(intent) {
   const choice = intent.runtime.toLowerCase();
@@ -24,12 +105,13 @@ function runtimeChoice(intent) {
 /** Deterministic owner actions; model output never enters this action path. */
 export class OwnerRouter {
   constructor({ client, ownerId, now = () => Date.now(), postLink = null,
-    dependencies = null, actionJournal = null,
+    dependencies = null, actionJournal = null, tagWords = TAG_WORDS,
     sessionReader = new SessionReader({ client }) }) {
     this.client = client;
     this.ownerId = String(ownerId);
     this.now = now;
     this.postLink = postLink;
+    this.tagWords = tagWords;
     this.dependencies = dependencies;
     this.actionJournal = actionJournal;
     this.trace = null;
@@ -77,14 +159,120 @@ export class OwnerRouter {
     }
   }
 
+  /** The deterministic status line for status-one, status-last and session-discuss; no brain needed. */
+  async statusSentence(intent, { allowReference = false } = {}) {
+    const resolved = await this.#target(intent.target, allowReference);
+    if (resolved.kind === "ambiguous") return `More than one session matches ${intent.target}. Please name the exact one.`;
+    if (resolved.kind !== "found") return `I can't find an open session named ${intent.target}.`;
+    return this.#describe(resolved.session);
+  }
+
+  async #describe(session) {
+    const name = session.tag || session.name || "that session";
+    this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
+    const task = session.currentTask ? ` Task: ${session.currentTask.slice(0, 140)}${session.currentTask.length > 140 ? "…" : ""}` : "";
+    let recent = "";
+    if (this.client.threadMessages) {
+      try {
+        const messages = await this.client.threadMessages(session.threadId, 12);
+        const bots = messages.filter(message => message.is_bot && message.content?.trim());
+        const dated = bots.filter(message => Number.isFinite(Date.parse(message.created_at)));
+        const last = dated.length ? dated.sort((a, b) =>
+          Date.parse(b.created_at) - Date.parse(a.created_at))[0] : bots.at(-1);
+        if (last) recent = ` Last reported: ${last.content.trim().replace(/\s+/g, " ").slice(0, 180)}`;
+      } catch { /* State still has a truthful, narrower answer. */ }
+    }
+    const project = session.project ? ` in ${session.project}` : "";
+    const state = session.state === "history" ? "not running now" : session.state;
+    return `${name} is ${state}${project}.${task}${recent}`;
+  }
+
+  #listOpen(rows) {
+    const open = rows.filter(isOpen);
+    if (!open.length) return "No sessions are open right now.";
+    const named = open.filter(row => displayName(row));
+    const parts = named.slice(0, LIST_MAX).map(row =>
+      `${displayName(row)} (${tagPhrase(row)}, ${spokenState(row.state)})`);
+    if (named.length > LIST_MAX) parts.push(`and ${named.length - LIST_MAX} more with names`);
+    if (open.length > named.length) parts.push(`and ${open.length - named.length} more without names`);
+    const hidden = open.filter(row => row.visible === false).length;
+    const visibility = hidden ? ` ${hidden} of them ${hidden === 1 ? "isn't" : "aren't"} visible in Discord.` : "";
+    return `${plural(open.length, "open session")}: ${parts.join("; ")}.${visibility}`;
+  }
+
+  #whyNoTag(rows, target) {
+    const open = rows.filter(isOpen);
+    const holders = open.filter(row => row.tag);
+    const untagged = open.filter(row => !row.tag);
+    let lead = "";
+    if (target) {
+      const match = matchSession(open, target);
+      if (match.kind === "found") {
+        const row = match.session;
+        if (row.tag) return `${displayName(row) || target} does have a tag: ${row.tag}.`;
+        lead = `${displayName(row) || target} has no tag. `;
+      } else if (match.kind === "ambiguous") {
+        lead = `More than one open session matches ${target}. `;
+      } else {
+        lead = `I don't see an open session called ${target}. `;
+      }
+    }
+    const held = holders.slice(0, 6).map(row => `${row.tag} for ${displayName(row) || "an unnamed thread"}`);
+    if (holders.length > 6) held.push(`and ${holders.length - 6} more`);
+    const free = Math.max(0, this.tagWords - holders.length);
+    let words;
+    if (!holders.length) words = `None of the ${this.tagWords} voice words are held.`;
+    else if (!free) words = `All ${this.tagWords} voice words are held: ${held.join(", ")}.`;
+    else words = `${holders.length} of ${this.tagWords} voice words ${holders.length === 1 ? "is" : "are"} held: ${held.join(", ")}. ` +
+      `${plural(free, "word")} ${free === 1 ? "is" : "are"} free, so EBI did not run out of tags.`;
+    const untaggedNames = untagged.map(displayName).filter(Boolean).slice(0, 3);
+    let missing;
+    if (!untagged.length) missing = "Every open session has a tag.";
+    else {
+      const examples = untaggedNames.length ? (untaggedNames.length === untagged.length ? `: ${untaggedNames.join(", ")}` :
+        `, including ${untaggedNames.join(", ")}`) : "";
+      missing = `${plural(untagged.length, "open session")} ${untagged.length === 1 ? "has" : "have"} no tag${examples}.`;
+    }
+    const remedy = free ? "" : " Closing a session frees its word.";
+    return `${lead}${words} ${missing}${remedy}`;
+  }
+
+  async #seeOne(target, allowReference) {
+    const rows = await this.client.snapshot();
+    if (PRONOUNS.has(target.toLowerCase())) {
+      const resolved = await this.#target(target, allowReference);
+      if (resolved.kind !== "found") return "Which session do you mean?";
+      return this.#yes(resolved.session);
+    }
+    const match = matchSession(rows.filter(isOpen), target);
+    if (match.kind === "found") return this.#yes(match.session);
+    if (match.kind === "ambiguous") {
+      return `More than one open session matches ${target}: ${match.matches.slice(0, 4).map(row => displayName(row) || row.tag).join(", ")}.`;
+    }
+    const closed = matchSession(rows.filter(row => !isOpen(row)), target);
+    if (closed.kind === "found") return `No, ${displayName(closed.session) || target} is closed.`;
+    if (match.closest) return `No, I don't see ${target} open. The closest open one is ${displayName(match.closest) || match.closest.tag}.`;
+    return `No, I don't see an open session called ${target}.`;
+  }
+
+  #yes(row) {
+    this.bound = { threadId: row.threadId, until: this.now() + BIND_MS };
+    return `Yes, ${displayName(row) || row.tag} is open. ${tagPhrase(row, true)}, ${spokenState(row.state)}.`;
+  }
+
   async handle(text, { speakerId, allowReference = false, shouldAct = () => true,
     intent: suppliedIntent = null } = {}) {
     if (String(speakerId) !== this.ownerId) return null;
     const intent = suppliedIntent || parseOwnerIntent(text);
     if (!intent) return null;
-    if (intent.kind === "clarify") return intent.reason === "hold" ?
-      "Okay, I won't send anything. Say the task again when you're ready." :
-      "Please say the final task once more so I send the right words.";
+    if (intent.kind === "clarify") {
+      if (intent.reason === "hold") return "Okay, I won't send anything. Say the task again when you're ready.";
+      if (intent.reason === "proposal-unavailable") return BRAIN_OUT_LINE;
+      return "Please say the final task once more so I send the right words.";
+    }
+    if (intent.kind === "list-open") return this.#listOpen(await this.client.snapshot());
+    if (intent.kind === "why-no-tag") return this.#whyNoTag(await this.client.snapshot(), intent.target);
+    if (intent.kind === "see-one") return this.#seeOne(intent.target, allowReference);
     if (intent.kind === "status-all") {
       const sessions = (await this.client.snapshot()).filter(s => !s.closed &&
         ["running", "queued"].includes(s.state));
@@ -97,8 +285,26 @@ export class OwnerRouter {
       return `Sessions: ${summary.join("; ")}${sessions.length > 5 ? `; and ${sessions.length - 5} more` : ""}.`;
     }
     if (intent.kind === "history") {
-      const found = await this.client.searchSessions(intent.query);
-      if (!found.length) return `I couldn't find a session about ${intent.query}.`;
+      // Open rows first, by name or project; closed-thread search is deferred.
+      const open = (await this.client.snapshot()).filter(isOpen);
+      const rows = searchRows(open, intent.query);
+      if (rows.length === 1) {
+        this.bound = { threadId: rows[0].threadId, until: this.now() + BIND_MS };
+        return `I found ${displayName(rows[0]) || rows[0].tag}. ${tagPhrase(rows[0], true)}, ${spokenState(rows[0].state)}.`;
+      }
+      if (rows.length > 1) {
+        const names = rows.slice(0, 5).map(row => `${displayName(row) || row.tag} (${tagPhrase(row)}, ${spokenState(row.state)})`);
+        return `I found ${rows.length} open sessions matching ${intent.query}: ${names.join("; ")}.`;
+      }
+      if (!this.client.searchSessions) return `I couldn't find an open session about ${intent.query}.`;
+      let found;
+      try {
+        const openIds = new Set(open.map(row => row.threadId));
+        found = (await this.client.searchSessions(intent.query)).filter(item => openIds.has(item.threadId));
+      } catch {
+        return `I couldn't find an open session about ${intent.query}, and the thread search isn't answering.`;
+      }
+      if (!found.length) return `I couldn't find an open session about ${intent.query}.`;
       if (found.length > 1) {
         const names = found.slice(0, 3).map(item => item.name.slice(0, 60) || "unnamed thread");
         return `I found ${found.length} matches: ${names.join("; ")}. Please narrow the topic or project.`;
@@ -260,24 +466,7 @@ export class OwnerRouter {
     if (resolved.kind !== "found") return `I can't find an open session named ${intent.target}.`;
     const session = resolved.session;
     const name = session.tag || session.name || "that session";
-    if (["status-one", "status-last", "session-discuss"].includes(intent.kind)) {
-      this.bound = { threadId: session.threadId, until: this.now() + BIND_MS };
-      const task = session.currentTask ? ` Task: ${session.currentTask.slice(0, 140)}${session.currentTask.length > 140 ? "…" : ""}` : "";
-      let recent = "";
-      if (this.client.threadMessages) {
-        try {
-          const messages = await this.client.threadMessages(session.threadId, 12);
-          const bots = messages.filter(message => message.is_bot && message.content?.trim());
-          const dated = bots.filter(message => Number.isFinite(Date.parse(message.created_at)));
-          const last = dated.length ? dated.sort((a, b) =>
-            Date.parse(b.created_at) - Date.parse(a.created_at))[0] : bots.at(-1);
-          if (last) recent = ` Last reported: ${last.content.trim().replace(/\s+/g, " ").slice(0, 180)}`;
-        } catch { /* State still has a truthful, narrower answer. */ }
-      }
-      const project = session.project ? ` in ${session.project}` : "";
-      const state = session.state === "history" ? "not running now" : session.state;
-      return `${name} is ${state}${project}.${task}${recent}`;
-    }
+    if (["status-one", "status-last", "session-discuss"].includes(intent.kind)) return this.#describe(session);
     if (intent.kind === "stop") {
       if (!(await this.#stillTarget(intent.target, session, allowReference))) {
         return "That tag changed while I was checking. Please say it again.";

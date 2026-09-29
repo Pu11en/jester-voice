@@ -15,10 +15,79 @@ const RUNTIME = new RegExp(`^(?:switch|set|move)\\s+${NAME}\\s+(?:to|onto)\\s+(c
 const CREATE = /^(?:start|create|open|make)(?: me)?(?: a)?(?: new)? session (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)? (?:to|and (?:ask|tell) (?:it|them) to) (.+)$/iu;
 const CREATE_EMPTY = /^(?:start|create|open|make)(?: me)?(?: an?| the)?(?: new)? (?:empty|blank) (?:session|thread) (?:in|for) (.+?)(?: (?:using|with) (codex|claude|sonnet|deepseek|dsh)(?: (sonnet|opus|haiku|auto))?)?[?.!]*$/iu;
 const HISTORY = /^(?:find|look up|search for)(?: the)? (?:session|thread)(?: where we| that| about| for)? (.+?)[?.!]*$/iu;
+// Bare "find X" is a session lookup (Drew's decision); "find out ..." stays conversation.
+const HISTORY_BARE = /^(?:find|look up|look for|search for|search)(?!\s+out\b)(?: me)?(?: the| an?| my| our)?(?: open)? (.+?)(?: (?:session|thread))?[?.!]*$/iu;
+// Model-free session questions. Leading discourse words ("Like what sessions ...") are dropped first.
+const FILLER = /^(?:(?:like|so|okay|ok|and|um|uh|yeah|well|alright|just|hey)[,\s]+)+/iu;
+const LIST_OPEN = [
+  /^what(?:'s| is)(?: currently| actually| all)? open(?: right now| now| currently| at the moment| today)?[?.!]*$/iu,
+  /^(?:what|which)(?: all)? (?:sessions?|threads?)(?: do (?:we|i) have| are| is| that are| that's| which are| we have| i have)?(?: currently| actually| still| really)? open(?: right now| now| currently| at the moment)?[?.!]*$/iu,
+  /^what do (?:we|i) have open(?: right now| now| currently)?[?.!]*$/iu,
+  /^(?:list|show me|show|name|read me|tell me|give me)(?: all(?: of)?)?(?: the| my| our)?(?: currently| actually)?(?: open| active)? (?:sessions|threads)(?: (?:that are |which are )?(?:currently )?open)?(?: right now| now)?[?.!]*$/iu,
+  /^how many (?:sessions|threads)(?: do (?:we|i) have| are)(?: currently| actually)? open(?: right now| now)?[?.!]*$/iu,
+  /^(?=.*\bopen\b)(?:do (?:we|i|you) have|are there|is there|are)(?: any| anything| some)?(?: (?:open |active )?(?:sessions?|threads?))?(?: (?:that are |which are )?(?:currently |still )?open)?[?.!]*$/iu,
+];
+const SEE_ONE = [
+  // "Can you have Zoro run the tests?" asks for work, so only "do you have X" is a question.
+  /^(?:(?:do|can|could) you (?:still )?(?:see|find)|do you (?:still )?have)(?: an?| the| my)? (.+?)(?: (?:session|thread))?(?: open| in there| there| listed| anywhere)?[?.!]*$/iu,
+  /^(?:do|did) (?:we|i) (?:still )?have(?: an?| the| my)? (.+?)(?: (?:session|thread))?(?: still)?(?: open)?[?.!]*$/iu,
+  /^is(?: there)?(?: an?| the| my)? (.+?)(?: (?:session|thread))? (?:still )?(?:open|listed)[?.!]*$/iu,
+  /^is there (?:an?|any) (?:session|thread) (?:for|called|named|on|about) (.+?)[?.!]*$/iu,
+];
+const SEE_ONE_PRONOUNS = new Set(["it", "him", "her", "them", "that one", "that session"]);
+const SEE_ONE_NOISE = /^(?:what|why|how|that|this|me|us|any|anything|something|nothing|everything|all|where|when|who|whether|if|one|some|more|which)\b|\b(?:with|about|that|this|of|in|on|for|to|from)\b/iu;
+const WHY = /\b(?:why|how come)\b/iu;
+const NO_TAG = new RegExp([
+  "\\bno (?:voice )?tags?\\b",
+  "\\b(?:without|missing) (?:a |the |its |any )?(?:voice )?tags?\\b",
+  "\\b(?:doesn't|does not|didn't|did not|hasn't|has not|don't|do not|never) (?:have|get|got|gotten|receive|received) (?:a |its |any |the )?(?:voice )?tags?\\b",
+  "\\b(?:isn't|is not|wasn't|was not) (?:there )?(?:a |any )?(?:voice )?tag\\b",
+  "\\btags? (?:is |are |was |were )?(?:missing|gone|absent)\\b",
+  "\\b(?:not tagged|untagged)\\b",
+].join("|"), "iu");
+const TAG_TARGET = /\b(?:on|for|with)\s+(?:the\s+|my\s+|that\s+|this\s+)?([\p{L}][\p{L}\p{N}' -]{0,40}?)(?:\s+(?:session|thread))?[?.!]*$/iu;
+const TAG_SUBJECT = /\b(?:does|did|doesn't|didn't|has|hasn't)\s+(?:the\s+)?([\p{L}][\p{L}\p{N}' -]{0,40}?)(?:\s+(?:session|thread))?\s+(?:not\s+)?(?:have|got|get|getting)\b/iu;
+const TAG_TARGET_NOISE = /^(?:one|it|that|this|them|some|any|an?|the|my|new|thread|session|sessions|threads|i|we|you)\b|\b(?:thread|session|sessions|threads)\b/iu;
+
+function whyNoTag(text) {
+  const why = WHY.exec(text);
+  if (!why || !NO_TAG.test(text.slice(why.index))) return null;
+  const question = text.slice(why.index);
+  const target = TAG_TARGET.exec(question) || TAG_SUBJECT.exec(question);
+  const name = target?.[1].trim();
+  return { kind: "why-no-tag", target: name && !TAG_TARGET_NOISE.test(name) ? name : null };
+}
+
+function seeOne(text) {
+  for (const pattern of SEE_ONE) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const target = match[1].trim();
+    if (SEE_ONE_PRONOUNS.has(target.toLowerCase())) return { kind: "see-one", target };
+    if (SEE_ONE_NOISE.test(target) || target.split(/\s+/).length > 4) return null;
+    return { kind: "see-one", target };
+  }
+  return null;
+}
+
+/** A turn addressed to a session (tell/ask/direct name) is never a Jester question. */
+function addressed(text, knownTags) {
+  if (TELL.test(text)) return true;
+  const direct = DIRECT.exec(text);
+  if (!direct) return false;
+  const name = direct[1].toLowerCase();
+  // Without a tag list, a discourse word before a comma ("Yeah, ...") is not a session.
+  return knownTags ? knownTags.has(name) : !FILLER.test(`${name} `);
+}
 const WHEN = new RegExp(`^(?:when|after)\\s+${NAME}\\s+(?:finishes|is done|completes)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
 const WHEN_RESULTS = /^(?:when|after)\s+(.+?)\s+(?:finish|finishes|are done|is done|complete|completes)[,;:]?\s+(?:tell|show|give)\s+me\s+(?:what\s+(?:i|we)\s+can\s+test|(?:the\s+)?test(?:ing)?\s+(?:ideas|steps|suggestions))[?.!]*$/iu;
 const WHEN_BOTH = new RegExp(`^(?:when|after)\\s+both\\s+(?:finish|are done|complete)[,;:]?\\s+(?:tell|ask)\\s+${NAME}\\s+(?:to|that)\\s+(.+)$`, "iu");
 const ALL_RUNNING = /^(?:all\s+(?:(?:of\s+)?(?:the\s+)?|my\s+)?(?:currently\s+)?(?:running|active|working)\s+sessions?|everyone\s+working)$/iu;
+
+/** Create, follow-on and thread-search commands keep their task words, even ones that sound like a question. */
+function isCommand(text) {
+  return [CREATE, CREATE_EMPTY, HISTORY, WHEN, WHEN_BOTH, WHEN_RESULTS].some(pattern => pattern.test(text));
+}
 
 function resultTargets(raw) {
   const names = raw.trim().replace(/^both\s+/iu, "");
@@ -47,6 +116,15 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
   if (/^(?:update me on (?:my )?sessions|give me a (?:session|sessions) update|what(?:'s| is) happening with (?:my )?sessions)[?.!]*$/i.test(text)) {
     return { kind: "status-all" };
   }
+  // Read-only session questions answered from the EBI snapshot, never by a model.
+  if (!addressed(text, knownTags) && !isCommand(text)) {
+    const question = text.replace(FILLER, "").trim();
+    if (LIST_OPEN.some(pattern => pattern.test(question))) return { kind: "list-open" };
+    const noTag = whyNoTag(question);
+    if (noTag) return noTag;
+    const seen = seeOne(question);
+    if (seen) return seen;
+  }
   const status = statusOne.exec(text) || statusNatural.exec(text);
   if (status) return { kind: "status-one", target: status[1] };
   if (statusLast.test(text)) return { kind: "status-last", target: "it" };
@@ -70,6 +148,8 @@ export function parseOwnerIntent(raw, { knownTags = null } = {}) {
     model: create[3] || null, instruction: create[4].trim() };
   const history = HISTORY.exec(text);
   if (history) return { kind: "history", query: history[1].trim().replace(/^(?:worked on|talked about|did)\s+/iu, "") };
+  const bareHistory = HISTORY_BARE.exec(text);
+  if (bareHistory) return { kind: "history", query: bareHistory[1].trim() };
   // Broader read-only questions may use ordinary wording. A current tag is
   // evidence of a target, never authorization for a session write.
   if (knownTags && /^(?:what|how|why|tell me|explain|help me understand|give me (?:an? )?(?:update|summary))/iu.test(text)) {

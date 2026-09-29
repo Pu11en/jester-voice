@@ -39,3 +39,14 @@ test("reports missing evidence without inventing a result", async () => {
   assert.match(text, /No substantive thread messages were available/);
   assert.match(text, /Current task field: unavailable/);
 });
+
+test("accepts the coming visibility field without changing today's evidence", async () => {
+  const reader = new SessionReader({ client: { async threadMessages() { return []; } } });
+  const base = { threadId: "1553779983158349925", tag: "zoro", state: "history", project: "", currentTask: "" };
+  const today = await reader.read(base);
+  assert.match(today, /state history\./);
+  assert.doesNotMatch(today, /visible/i);
+  const coming = await reader.read({ ...base, visible: false, closed: false, openCount: 24 });
+  assert.match(coming, /state history; not visible in Discord\./);
+  assert.match(await reader.read({ ...base, visible: true }), /state history; visible in Discord\./);
+});

@@ -80,3 +80,57 @@ test("final direct address and corrected destination yield one task draft", () =
   assert.deepEqual(parseOwnerIntent("Tell Zoro to review this, but don't send that yet"),
     { kind: "clarify", reason: "hold" });
 });
+
+test("model-free session questions parse without a brain, in Drew's own wording", () => {
+  const live = { knownTags: new Set(["zoro", "franky"]) };
+  for (const line of [
+    "What's open?", "What is open right now?", "What threads do we have open?",
+    "What sessions are open?", "Like what sessions that are actually open?",
+    "List my sessions", "List my threads", "Which threads are open?",
+    "Jester, what sessions do I have open?", "Are there any sessions open?",
+  ]) assert.deepEqual(parseOwnerIntent(line, live), { kind: "list-open" }, line);
+  assert.deepEqual(parseOwnerIntent("Jester, do you see pod locks?", live), { kind: "see-one", target: "pod locks" });
+  assert.deepEqual(parseOwnerIntent("Yo, Jester, do you see pod logs?", live), { kind: "see-one", target: "pod logs" });
+  assert.deepEqual(parseOwnerIntent("Is podlox open?", live), { kind: "see-one", target: "podlox" });
+  assert.deepEqual(parseOwnerIntent("Do you have Zoro?", live), { kind: "see-one", target: "Zoro" });
+  assert.deepEqual(parseOwnerIntent("Can you see the Task loop thread?", live), { kind: "see-one", target: "Task loop" });
+  assert.deepEqual(parseOwnerIntent("Is it open?", live), { kind: "see-one", target: "it" });
+  assert.equal(parseOwnerIntent("Do you see what I mean?", live), null);
+  assert.equal(parseOwnerIntent("Do you see the problem with this approach?", live), null);
+  assert.deepEqual(parseOwnerIntent(
+    "Yeah, so I need you to, you know, how come there's nothing, like no tag on one of the sessions?", live),
+  { kind: "why-no-tag", target: null });
+  assert.deepEqual(parseOwnerIntent("Why is there no tag on the thread I created?", live), { kind: "why-no-tag", target: null });
+  assert.deepEqual(parseOwnerIntent("Jester, why no tag?", live), { kind: "why-no-tag", target: null });
+  assert.deepEqual(parseOwnerIntent("Why does podlox have no tag?", live), { kind: "why-no-tag", target: "podlox" });
+  assert.deepEqual(parseOwnerIntent("How come there's no tag on the podlox session?", live), { kind: "why-no-tag", target: "podlox" });
+  const addressed = parseOwnerIntent("Tell Frankie there's no tag on the release", live);
+  assert.notEqual(addressed.kind, "why-no-tag", "a turn addressed to a session is never a tag question");
+  assert.equal(addressed.target, "Frankie");
+  assert.deepEqual(parseOwnerIntent("Find podlox", live), { kind: "history", query: "podlox" });
+  assert.deepEqual(parseOwnerIntent("Jester, search for pod locks", live), { kind: "history", query: "pod locks" });
+  assert.deepEqual(parseOwnerIntent("Look up the Task loop thread", live), { kind: "history", query: "Task loop" });
+  assert.deepEqual(parseOwnerIntent("Find the session where we worked on login", live), { kind: "history", query: "login" });
+  assert.equal(parseOwnerIntent("Find out what Zoro did", live), null);
+  assert.deepEqual(parseOwnerIntent("Jester, stop Zoro", live), { kind: "stop", target: "Zoro" });
+  assert.deepEqual(parseOwnerIntent("Jester, open an empty thread in Jobs", live),
+    { kind: "create", project: "Jobs", runtime: null, model: null, instruction: null, empty: true });
+  assert.deepEqual(parseOwnerIntent("Who's running?", live), { kind: "status-all" });
+});
+
+test("an action whose task words mention tags or sessions is never hijacked by a question", () => {
+  const live = { knownTags: new Set(["zoro", "nami"]) };
+  assert.deepEqual(parseOwnerIntent("Create a session in jobs to find out why podlox has no tag", live),
+    { kind: "create", project: "jobs", runtime: null, model: null, instruction: "find out why podlox has no tag" });
+  assert.deepEqual(parseOwnerIntent("Open a session in jobs and tell it to explain why there's no tag on it", live),
+    { kind: "create", project: "jobs", runtime: null, model: null, instruction: "explain why there's no tag on it" });
+  assert.deepEqual(parseOwnerIntent("When Zoro finishes, tell Nami to check why there is no tag", live),
+    { kind: "dependency", source: "Zoro", target: "Nami", instruction: "check why there is no tag" });
+  assert.deepEqual(parseOwnerIntent("Find the session where we talked about why there was no tag", live),
+    { kind: "history", query: "why there was no tag" });
+  // "Can you have X do Y" asks Jester to get work done; it is not a do-you-see question.
+  assert.equal(parseOwnerIntent("Could you have Zoro run the tests?", live), null);
+  assert.equal(parseOwnerIntent("Can you have Nami check the build?", live), null);
+  assert.deepEqual(parseOwnerIntent("Do you have podlox open?", live), { kind: "see-one", target: "podlox" });
+  assert.deepEqual(parseOwnerIntent("How come there's no tag on podlox?", live), { kind: "why-no-tag", target: "podlox" });
+});
