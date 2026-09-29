@@ -1,6 +1,61 @@
 // These are behavioral examples, not generated model answers. Each check is
 // evaluated after a complete turn against the real Conversation and OwnerRouter.
+//
+// Scenario keys: holdPlayback (replies keep playing until a step sets release),
+// brainFailure (every Luna request rejects with this reason), rows (the EBI
+// snapshot). A step's events list scripts worker events in order; without it a
+// step is one turn_end with the step's text. See sim/README.md.
+const DOWN_ROWS = [
+  { threadId: "1553779983158349925", tag: "zoro", name: "Drew's Audit", project: "/projects/Drews-Audit",
+    state: "history", closed: false },
+  { threadId: "1556000000000000001", tag: "nami", name: "podlox", project: "/projects/podlox",
+    currentTask: "Fixing the upload queue", state: "running", closed: false },
+  // EBI still returns closed rows today; Jester must never name them as open.
+  { threadId: "1556000000000000002", tag: "", name: "Old Site", project: "/projects/old-site",
+    state: "history", closed: true },
+];
+
 export const scenarios = [
+  {
+    id: "hum-during-answer",
+    title: "A hum during a long answer neither stops the reply nor starts a turn",
+    holdPlayback: true,
+    steps: [
+      { speaker: "owner", text: "Jester, tell me about the audit in detail.",
+        expect: { brain: 1, says: ["landing page"], stops: 0, writes: 0 } },
+      { speaker: "owner", events: [
+        { ev: "speech_start" }, { ev: "pause", text: "Mm-hmm." }, { ev: "turn_end", text: "Mm-hmm." },
+      ], release: true,
+        expect: { brain: 0, stops: 0, writes: 0, says: ["slow footer"], transcriptOmits: ["mm-hmm"] } },
+    ],
+  },
+  {
+    id: "stop-mid-answer",
+    title: "Jester, stop cuts the answer inside the pause event and asks nobody",
+    holdPlayback: true,
+    steps: [
+      { speaker: "owner", text: "Jester, tell me about the audit in detail.",
+        expect: { brain: 1, says: ["landing page"], stops: 0, writes: 0 } },
+      { speaker: "owner", events: [
+        { ev: "speech_start" }, { ev: "pause", text: "Jester, stop." }, { ev: "turn_end", text: "Jester, stop." },
+      ], expect: { stopOn: "pause", brain: 0, writes: 0 } },
+    ],
+  },
+  {
+    id: "luna-down-reads",
+    title: "With Luna out, session reads still work and chat gets one honest line",
+    brainFailure: "usageLimitExceeded",
+    rows: DOWN_ROWS,
+    steps: [
+      { speaker: "owner", text: "Jester, what's open?",
+        expect: { says: ["Drew's Audit", "podlox"], saysNot: ["Old Site"], brain: 0, brainAnswers: 0, writes: 0 } },
+      { speaker: "owner", text: "Jester, do you see podlox?",
+        expect: { says: ["yes", "podlox"], brain: 0, brainAnswers: 0, writes: 0 } },
+      { speaker: "owner", text: "Jester, what's the weather?",
+        expect: { says: ["Luna is out until October 4. I can still list, find, send, stop and close sessions."],
+          brainAnswers: 0, writes: 0 } },
+    ],
+  },
   {
     id: "natural-assignment",
     title: "Natural request proposes one exact Zoro task; a hold sends nothing",
