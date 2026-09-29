@@ -103,7 +103,10 @@ export class Dependencies {
     for (const item of this.items) {
       if (item.status !== "pending" || item.sourceId !== threadId) continue;
       const eventAt = turn?.accepted_at || turn?.updated_at;
-      if (!item.createdAt || !eventAt || Date.parse(eventAt) <= Date.parse(item.createdAt)) continue;
+      const eventTime = Date.parse(eventAt);
+      const createdTime = Date.parse(item.createdAt);
+      if (!Number.isFinite(eventTime) || !Number.isFinite(createdTime) ||
+          eventTime <= createdTime) continue;
       // Persist dispatching before an external POST. Repeats use this one ID.
       item.status = "dispatching";
       await this.#save();
@@ -134,9 +137,12 @@ export class Dependencies {
         item.status = "blocked";
         changed = true;
       }
-      if (item.status === "pending" && item.sourceId === threadId) {
+      if (item.status === "pending" && item.sourceId === threadId && turn?.terminal === true) {
         const eventAt = turn?.updated_at;
-        if (!item.createdAt || !eventAt || Date.parse(eventAt) <= Date.parse(item.createdAt)) continue;
+        const eventTime = Date.parse(eventAt);
+        const createdTime = Date.parse(item.createdAt);
+        if (!Number.isFinite(eventTime) || !Number.isFinite(createdTime) ||
+            eventTime <= createdTime) continue;
         item.status = "blocked";
         changed = true;
       }

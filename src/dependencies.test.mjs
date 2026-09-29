@@ -56,7 +56,7 @@ test("uncertain delivery retries the same request ID; failed source blocks dispa
     assert.equal(calls.length, 2);
     assert.equal(calls[0].requestId, calls[1].requestId);
     await deps.add({ sourceId, destinationId, task: "do not run" });
-    await deps.failed(sourceId, { updated_at: "1970-01-01T00:00:12Z" });
+    await deps.failed(sourceId, { terminal: true, updated_at: "1970-01-01T00:00:12Z" });
     await deps.accepted(sourceId, { accepted_at: "1970-01-01T00:00:12Z" });
     assert.equal(calls.length, 2);
     await deps.close();
@@ -80,6 +80,31 @@ test("an old completion cannot trigger a newly requested follow-on task", async 
     assert.equal(deps.items[0].status, "pending");
     await deps.accepted(sourceId, { accepted_at: "2026-09-28T12:00:01Z" });
     assert.equal(calls.length, 1);
+    await deps.close();
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+for (const [kind, turn] of [
+  ["accepted", { accepted_at: "invalid" }],
+  ["failed", { terminal: true, updated_at: "invalid" }],
+  ["failed", { terminal: false, updated_at: "2026-09-28T12:00:01Z" }],
+]) test(`single-source handoffs ignore invalid evidence: ${kind} ${JSON.stringify(turn)}`, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "jester-deps-"));
+  const now = Date.parse("2026-09-28T12:00:00Z");
+  const calls = [];
+  const client = { snapshot: async () => [{ threadId: destinationId, closed: false }],
+    sendSpoken: async payload => { calls.push(payload); return { status: "posted" }; } };
+  try {
+    const deps = new Dependencies({ client, ownerId, file: join(dir, "dependencies.json"),
+      now: () => now });
+    await deps.start();
+    const pending = await deps.add({ sourceId, destinationId, task: "wait for success" });
+    await deps[kind](sourceId, turn);
+    assert.equal(calls.length, 0, "invalid evidence cannot authorize a task");
+    assert.equal(pending.status, "pending", "only a dated terminal failure blocks the task");
+    await deps.accepted(sourceId, { accepted_at: "2026-09-28T12:00:02Z" });
+    assert.equal(calls.length, 1);
+    assert.equal(pending.status, "posted");
     await deps.close();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
