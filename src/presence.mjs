@@ -58,7 +58,7 @@ export class Presence extends EventEmitter {
       // A saved dismissal belongs to the previous room visit. If startup
       // observes the owner absent, that visit ended while we were offline.
       if (!ownerAlreadyPresent && this.dismissed) {
-        await this.#saveDismissed(false);
+        await this.#saveDismissedOrWarn(false);
         this.dismissed = false;
       }
       this.restoredPresence = ownerAlreadyPresent && !this.dismissed;
@@ -95,10 +95,14 @@ export class Presence extends EventEmitter {
   async join() {
     if (this.leaving) await this.leaving;
     if (!this.inPresence || this.joined || this.joining) return this.joining;
-    if (this.dismissed) await this.#saveDismissed(false);
+    const wasDismissed = this.dismissed;
     this.emit("reset");
     this.dismissed = false;
-    this.joining = Promise.resolve(this.voice.connect())
+    // Claim the join before any await so a second request cannot connect again.
+    this.joining = (async () => {
+      if (wasDismissed) await this.#saveDismissedOrWarn(false);
+      await this.voice.connect();
+    })()
       .then(async () => {
         this.joined = true;
         if (!this.inPresence || this.dismissed) {
@@ -123,7 +127,8 @@ export class Presence extends EventEmitter {
     if (this.leaving) return this.leaving;
     this.leaving = (async () => {
       this.dismissed = true;
-      await this.#saveDismissed(true);
+      // The owner's request to leave the room wins over a failed state write.
+      await this.#saveDismissedOrWarn(true);
       this.emit("reset", "owner_leave");
       clearTimeout(this.recoveryTimer);
       if (this.joining) await this.joining;
@@ -149,7 +154,7 @@ export class Presence extends EventEmitter {
       const wasDismissed = this.dismissed;
       this.dismissed = false;
       this.restoredPresence = false;
-      if (wasDismissed) await this.#saveDismissed(false);
+      if (wasDismissed) await this.#saveDismissedOrWarn(false);
       clearTimeout(this.recoveryTimer);
       if (this.joining) await this.joining;
       this.voice.disconnect();
@@ -211,6 +216,14 @@ export class Presence extends EventEmitter {
       this.dismissed = JSON.parse(await readFile(this.stateFile, "utf8")).dismissed === true;
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
+    }
+  }
+
+  async #saveDismissedOrWarn(dismissed) {
+    try {
+      await this.#saveDismissed(dismissed);
+    } catch (error) {
+      this.logger.warn?.(`[presence] could not save dismissal=${dismissed}:`, error.message);
     }
   }
 

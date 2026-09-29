@@ -20,6 +20,7 @@ The EBI OpenSpec change `stabilize-session-reliability` holds the combined plan.
 | JV-03 / P1 | Single-source dependency accepted an invalid completion date and dispatched; invalid failure date blocked it; temporary/nonterminal failure also permanently blocked it. Three independent offline cases failed. | Require finite newer event/creation timestamps and terminal failure evidence, matching the grouped workflow's intended policy. Positive recovery and final-failure controls retained. `src/dependencies.mjs`, tests. |
 | JV-04 / P2 | Conversation.close returned with evidence writes still queued; tests logged ENOENT after temporary files were removed. A controlled blocked log queue proved close returned early. | Drain the owned log queue before returning from shutdown. Regression checks both waiting and persisted action identity. `src/conversation.mjs`, tests. |
 | JV-05 / P1 | Overlapping identical actions could reuse an in-memory journal row while its first save was pending. A failed save still let the spoken route POST with an ID that was never durable; failed `finish` exposed an unsaved `posted` state, and a rejected write poisoned every later save. Four temporary-file/fake-EBI regressions reproduce these cases. | Serialize duplicate decisions and disk writes. Publish new in-memory state only after atomic rename succeeds. Keep the caller's write failure visible while allowing later attempts to recover. `src/action-journal.mjs`, tests. |
+| JV-06 / P1 | From review of `5653e5e` (persisted dismissal). Three offline regressions: (a) a failed dismissal write made `leave()` throw before muting/disconnecting, so Jester stayed in the room after the owner asked it to leave; (b) two concurrent rejoin requests after a leave both connected (3 connects vs 2); (c) owner departure after a leave, with a failed write, raised an unhandled rejection from the Discord event handler (fatal by Node default). All three failed first. | A failed dismissal write is logged and never blocks leaving, departure or rejoining. `join()` claims its in-flight promise before any await. Startup still fails closed on an unreadable state file, matching the privacy file (lead, not changed). `src/presence.mjs`, tests. |
 
 No live incident is attributed to these mechanisms without corresponding live evidence.
 All regressions use temporary state and fake service boundaries. The simulation RED
@@ -44,6 +45,10 @@ test intercepts leave specifically so proving the bug cannot mutate live state.
   action-journal/router suite passed **23 tests** after the fix. The full Node suite
   passed **143 tests**, the worker Python suite **7**, and the isolated simulator
   reported **16/16**. `git diff --check` passed. These are offline checks only.
+- JV-06 (September 29): three presence regressions failed first (leave threw
+  before disconnect; concurrent rejoin connected twice; departure produced an
+  unhandled rejection). After the fix: **146 Node tests, 7 Python tests (22.19s),
+  16/16 isolated simulations**; `git diff --check` passed. Offline only.
 - The shared pre-commit hook runs Lefthook, but this project has no Lefthook config;
   it reports that and exits successfully. The checks above were run explicitly.
 - No saved human `sim/results/review.json` was present in main at review time.

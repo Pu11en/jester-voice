@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import test from "node:test";
 import { Presence } from "./presence.mjs";
 
@@ -261,4 +261,54 @@ test("owner arrival, departure and manual leave/rejoin reset conversation attent
   assert.equal(resets, 5);
   assert.deepEqual(reasons, [undefined, "owner_leave", undefined, "owner_departed", undefined]);
   presence.stop();
+});
+
+test("owner leave disconnects even when the dismissal cannot be saved", async () => {
+  const blocker = join(tmpdir(), `jester-presence-blocker-${randomUUID()}`);
+  stateFiles.add(blocker);
+  await writeFile(blocker, "a file where the state directory should be");
+  const warnings = [];
+  const { presence, calls } = setup({ channelId: "room" });
+  presence.logger = { warn(...args) { warnings.push(args.join(" ")); } };
+  await presence.start();
+  await waitFor(() => calls.connect === 1 && presence.joining === null);
+  presence.stateFile = join(blocker, "presence.json"); // the disk refuses the next write
+  await presence.leave();
+  assert.equal(calls.disconnect, 1, "the owner asked Jester to leave the room");
+  assert.ok(calls.sequence.includes("mute:true"));
+  assert.equal(presence.dismissed, true);
+  assert.ok(warnings.some(line => line.includes("dismissal")), "the failed save is reported");
+  presence.stop();
+});
+
+test("concurrent rejoin requests after a leave connect once", async () => {
+  const { presence, calls } = setup({ channelId: "room" });
+  await presence.start();
+  await waitFor(() => calls.connect === 1 && presence.joining === null);
+  await presence.leave();
+  await Promise.all([presence.join(), presence.join()]);
+  assert.equal(calls.connect, 2, "one initial join and one rejoin");
+  presence.stop();
+});
+
+test("owner departure after a leave survives a failed dismissal save", async () => {
+  const blocker = join(tmpdir(), `jester-presence-blocker-${randomUUID()}`);
+  stateFiles.add(blocker);
+  await writeFile(blocker, "a file where the state directory should be");
+  const rejections = [];
+  const onRejection = (error) => rejections.push(error);
+  process.on("unhandledRejection", onRejection);
+  try {
+    const { presence, client } = setup({ channelId: "room" });
+    await presence.start();
+    await presence.leave();
+    presence.stateFile = join(blocker, "presence.json");
+    client.emit("voiceStateUpdate", {}, { id: "owner", guild: { id: "guild" }, channelId: null });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.deepEqual(rejections, []);
+    assert.equal(presence.dismissed, false, "the visit ended, even if the file is stale");
+    presence.stop();
+  } finally {
+    process.off("unhandledRejection", onRejection);
+  }
 });
